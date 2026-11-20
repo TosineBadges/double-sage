@@ -1,979 +1,1099 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>Double Sage — Pass & Play</title>
-  <style>
-    :root {
-      --bg: #0b0f19;
-      --card: #131a2a;
-      --card-alt: #1a2338;
-      --gold: #f5b942;
-      --gold-dim: #c48e24;
-      --teal: #2dd4bf;
-      --teal-dim: #14b8a6;
-      --text: #f1f5f9;
-      --muted: #94a3b8;
-      --danger: #f43f5e;
-      --success: #10b981;
-      --border: rgba(255, 255, 255, 0.08);
-    }
-    * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-    body {
-      margin: 0;
-      background: radial-gradient(circle at top, #162038 0%, var(--bg) 65%);
-      color: var(--text);
-      min-height: 100vh;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-    }
-    header {
-      width: 100%;
-      max-width: 540px;
-      padding: 14px 18px;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      border-bottom: 1px solid var(--border);
-      background: rgba(11, 15, 25, 0.85);
-      backdrop-filter: blur(10px);
-      position: sticky;
-      top: 0;
-      z-index: 50;
-    }
-    .brand { display: flex; align-items: center; gap: 10px; }
-    .brand img {
-      width: 38px; height: 38px; border-radius: 10px; object-fit: cover;
-      border: 1.5px solid var(--gold);
-    }
-    .brand-fallback {
-      width: 38px; height: 38px; border-radius: 10px;
-      background: linear-gradient(135deg, var(--gold), var(--teal));
-      display: flex; align-items: center; justify-content: center;
-      font-weight: 900; color: #0b0f19; font-size: 16px;
-    }
-    .brand-title { font-size: 18px; font-weight: 800; letter-spacing: 0.5px; color: var(--gold); }
-    .brand-sub { font-size: 11px; color: var(--teal); font-weight: 600; text-transform: uppercase; letter-spacing: 1px; }
-    .header-actions { display: flex; gap: 8px; }
-    .pill-btn {
-      background: var(--card-alt);
-      color: var(--text);
-      border: 1px solid var(--border);
-      padding: 7px 11px;
-      border-radius: 999px;
-      font-size: 12px;
-      font-weight: 700;
-      cursor: pointer;
-    }
-    .pill-btn:active { transform: scale(0.96); }
-    main { width: 100%; max-width: 540px; padding: 16px; flex: 1; }
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Double Sage — Pass & Play</title>
+<style>
+  :root {
+    --bg: #0b1120;
+    --card: #131c31;
+    --card-alt: #1a2642;
+    --gold: #f59e0b;
+    --gold-light: #fcd34d;
+    --teal: #14b8a6;
+    --teal-light: #5eead4;
+    --danger: #ef4444;
+    --success: #22c55e;
+    --text: #f8fafc;
+    --muted: #94a3b8;
+    --border: rgba(255,255,255,0.1);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  body { background: var(--bg); color: var(--text); min-height: 100vh; display: flex; flex-direction: column; align-items: center; }
 
-    /* Hero Showcase */
-    .hero-box {
-      margin-bottom: 16px;
-      border-radius: 16px;
-      overflow: hidden;
-      border: 1px solid rgba(245, 185, 66, 0.25);
-      background: var(--card);
-      box-shadow: 0 12px 30px rgba(0,0,0,0.4);
-    }
-    .hero-banner {
-      width: 100%;
-      max-height: 210px;
-      object-fit: cover;
-      display: block;
-    }
-    .hero-gallery {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 8px;
-      padding: 10px;
-      background: rgba(11, 15, 25, 0.6);
-    }
-    .hero-card {
-      position: relative;
-      border-radius: 10px;
-      overflow: hidden;
-      border: 1px solid var(--border);
-      background: var(--card-alt);
-      min-height: 115px;
-    }
-    .hero-card img {
-      width: 100%;
-      height: 130px;
-      object-fit: cover;
-      display: block;
-    }
-    .hero-tag {
-      position: absolute;
-      bottom: 0; left: 0; right: 0;
-      background: linear-gradient(transparent, rgba(11,15,25,0.95));
-      padding: 14px 8px 6px;
-      font-size: 11px;
-      font-weight: 700;
-      color: var(--gold);
-      text-align: center;
-    }
+  /* Full-screen 4-Slide Intro Splash */
+  #intro-overlay {
+    position: fixed; inset: 0; z-index: 9999; background: #060a14;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    padding: 20px; text-align: center; transition: opacity 0.45s ease;
+  }
+  #intro-overlay.hidden { opacity: 0; pointer-events: none; display: none; }
+  .intro-frame {
+    position: relative; width: 100%; max-width: 440px; height: 340px;
+    border-radius: 20px; overflow: hidden; border: 2px solid var(--gold);
+    box-shadow: 0 20px 50px rgba(0,0,0,0.8), 0 0 25px rgba(245,158,11,0.25);
+    background: #0f172a; display: flex; align-items: center; justify-content: center;
+  }
+  .intro-frame img {
+    width: 100%; height: 100%; object-fit: contain; background: #090e1a;
+    animation: zoomSlide 3s ease-in-out forwards;
+  }
+  @keyframes zoomSlide {
+    0% { transform: scale(0.95); opacity: 0.3; }
+    15% { transform: scale(1.0); opacity: 1; }
+    85% { transform: scale(1.03); opacity: 1; }
+    100% { transform: scale(1.05); opacity: 0.9; }
+  }
+  .intro-caption {
+    margin-top: 16px; font-size: 1.15rem; font-weight: 800; letter-spacing: 0.5px;
+    background: linear-gradient(90deg, var(--gold-light), var(--teal-light));
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  }
+  .intro-sub { font-size: 0.85rem; color: var(--muted); margin-top: 4px; }
+  .intro-progress-wrap {
+    width: 100%; max-width: 440px; height: 6px; background: rgba(255,255,255,0.12);
+    border-radius: 99px; overflow: hidden; margin-top: 16px;
+  }
+  .intro-progress-bar {
+    height: 100%; width: 0%; background: linear-gradient(90deg, var(--gold), var(--teal));
+    transition: width 0.1s linear;
+  }
+  .intro-dots { display: flex; gap: 8px; margin-top: 12px; }
+  .intro-dot { width: 10px; height: 10px; border-radius: 50%; background: rgba(255,255,255,0.2); transition: 0.2s; }
+  .intro-dot.active { background: var(--gold); transform: scale(1.25); }
+  .intro-actions { display: flex; gap: 10px; margin-top: 18px; width: 100%; max-width: 440px; }
 
-    .card {
-      background: var(--card);
-      border: 1px solid var(--border);
-      border-radius: 16px;
-      padding: 18px;
-      margin-bottom: 14px;
-      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
-    }
-    h2 { margin: 0 0 12px; font-size: 18px; color: var(--gold); }
-    h3 { margin: 0 0 10px; font-size: 15px; color: var(--teal); }
-    label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 5px; font-weight: 600; }
-    input, select, textarea {
-      width: 100%;
-      padding: 11px 12px;
-      border-radius: 10px;
-      border: 1px solid var(--border);
-      background: var(--card-alt);
-      color: var(--text);
-      font-size: 15px;
-      margin-bottom: 12px;
-      outline: none;
-    }
-    input:focus, select:focus, textarea:focus { border-color: var(--teal); }
-    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-    .btn {
-      width: 100%;
-      padding: 13px;
-      border-radius: 12px;
-      border: none;
-      font-size: 15px;
-      font-weight: 800;
-      cursor: pointer;
-      transition: transform 0.1s ease, opacity 0.2s;
-      margin-bottom: 8px;
-    }
-    .btn:active { transform: scale(0.98); }
-    .btn-gold { background: linear-gradient(135deg, var(--gold), #e09b19); color: #0b0f19; }
-    .btn-teal { background: linear-gradient(135deg, var(--teal), #0d9488); color: #0b0f19; }
-    .btn-danger { background: var(--danger); color: #fff; }
-    .btn-ghost { background: var(--card-alt); color: var(--text); border: 1px solid var(--border); }
-    .toggle-row {
-      display: flex; align-items: center; justify-content: space-between;
-      background: var(--card-alt); padding: 11px 14px; border-radius: 12px;
-      margin-bottom: 12px; border: 1px solid var(--border);
-    }
-    .toggle-row input[type="checkbox"] { width: 20px; height: 20px; margin: 0; accent-color: var(--gold); }
-    .hint-pill {
-      background: rgba(45, 212, 191, 0.12);
-      border: 1px solid var(--teal);
-      color: var(--teal);
-      padding: 12px;
-      border-radius: 12px;
-      font-weight: 800;
-      text-align: center;
-      font-size: 15px;
-      margin: 12px 0;
-    }
-    .timer-box {
-      font-size: 34px;
-      font-weight: 900;
-      text-align: center;
-      color: var(--gold);
-      margin: 8px 0;
-      font-variant-numeric: tabular-nums;
-    }
-    .timer-urgent { color: var(--danger); animation: pulse 0.6s infinite alternate; }
-    @keyframes pulse { from { transform: scale(1); } to { transform: scale(1.08); } }
-    .score-row {
-      display: flex; justify-content: space-between; align-items: center;
-      padding: 10px 12px; background: var(--card-alt); border-radius: 10px;
-      margin-bottom: 8px; border: 1px solid var(--border);
-    }
-    .hidden { display: none !important; }
-    .modal-backdrop {
-      position: fixed; inset: 0; background: rgba(0, 0, 0, 0.8);
-      display: flex; align-items: center; justify-content: center;
-      padding: 16px; z-index: 100;
-    }
-    .modal-card {
-      background: var(--card); border: 1px solid var(--gold);
-      border-radius: 16px; padding: 18px; width: 100%; max-width: 480px;
-      max-height: 85vh; overflow-y: auto;
-    }
-    .qb-item {
-      background: var(--card-alt); border: 1px solid var(--border);
-      border-radius: 10px; padding: 10px; margin-bottom: 8px;
-      display: flex; justify-content: space-between; align-items: center; gap: 8px;
-    }
-    .badge {
-      display: inline-block; padding: 3px 8px; border-radius: 6px;
-      font-size: 11px; font-weight: 800; background: rgba(245,185,66,0.18); color: var(--gold);
-    }
-  </style>
+  /* Sticky Top Header & Audio Bar */
+  header {
+    width: 100%; max-width: 560px; padding: 12px 16px;
+    background: rgba(19, 28, 49, 0.95); backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 100;
+  }
+  .header-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .brand { display: flex; align-items: center; gap: 10px; }
+  .brand-icon {
+    width: 36px; height: 36px; border-radius: 10px; object-fit: cover;
+    border: 1.5px solid var(--gold); background: #1e293b;
+  }
+  .brand h1 {
+    font-size: 1.15rem; font-weight: 800;
+    background: linear-gradient(90deg, var(--gold-light), var(--teal-light));
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  }
+  .audio-bar {
+    display: flex; align-items: center; gap: 6px; margin-top: 10px;
+    padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.07); flex-wrap: wrap;
+  }
+  .pill-btn {
+    background: var(--card-alt); color: var(--text); border: 1px solid var(--border);
+    padding: 5px 10px; border-radius: 99px; font-size: 0.75rem; font-weight: 700;
+    cursor: pointer; display: inline-flex; align-items: center; gap: 4px;
+  }
+  .pill-btn.active { border-color: var(--teal); color: var(--teal-light); background: rgba(20,184,166,0.14); }
+  .vol-wrap { display: flex; align-items: center; gap: 6px; flex: 1; min-width: 130px; }
+  .vol-wrap label { font-size: 0.72rem; color: var(--muted); font-weight: 700; white-space: nowrap; }
+  input[type="range"] {
+    flex: 1; accent-color: var(--gold); height: 5px; cursor: pointer;
+  }
+
+  /* Main Container */
+  main { width: 100%; max-width: 560px; padding: 16px; flex: 1; }
+  .card {
+    background: var(--card); border: 1px solid var(--border); border-radius: 16px;
+    padding: 18px; margin-bottom: 16px; box-shadow: 0 10px 25px rgba(0,0,0,0.35);
+  }
+  h2 { font-size: 1.2rem; margin-bottom: 12px; color: var(--gold-light); }
+  h3 { font-size: 1rem; margin-bottom: 8px; color: var(--teal-light); }
+  p.sub { color: var(--muted); font-size: 0.88rem; margin-bottom: 14px; line-height: 1.45; }
+
+  /* Hero Showcase Strip on Setup Screen */
+  .hero-strip {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 14px;
+  }
+  .hero-thumb {
+    border-radius: 10px; overflow: hidden; border: 1px solid var(--border);
+    aspect-ratio: 1 / 1; background: #090e1a; cursor: pointer; position: relative;
+  }
+  .hero-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+  label.field-label { display: block; font-size: 0.82rem; font-weight: 700; color: var(--muted); margin-bottom: 6px; margin-top: 12px; }
+  input[type="text"], input[type="number"], select, textarea {
+    width: 100%; padding: 11px 12px; border-radius: 10px; border: 1px solid var(--border);
+    background: #090e1a; color: var(--text); font-size: 0.95rem; outline: none;
+  }
+  input:focus, select:focus, textarea:focus { border-color: var(--teal); }
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+  .btn {
+    width: 100%; padding: 13px; border: none; border-radius: 12px; font-size: 0.98rem;
+    font-weight: 800; cursor: pointer; margin-top: 12px; transition: transform 0.1s, opacity 0.2s;
+  }
+  .btn:active { transform: scale(0.98); }
+  .btn-gold { background: linear-gradient(135deg, var(--gold), #d97706); color: #090e1a; }
+  .btn-teal { background: linear-gradient(135deg, var(--teal), #0d9488); color: #090e1a; }
+  .btn-dark { background: var(--card-alt); color: var(--text); border: 1px solid var(--border); }
+  .btn-danger { background: var(--danger); color: #fff; }
+  .btn-success { background: var(--success); color: #052e16; }
+  .btn-sm { padding: 8px 12px; font-size: 0.82rem; width: auto; margin-top: 0; }
+
+  .switch-row {
+    display: flex; align-items: center; justify-content: space-between;
+    background: var(--card-alt); padding: 12px; border-radius: 12px; margin-top: 12px;
+    border: 1px solid var(--border);
+  }
+  .switch-row input[type="checkbox"] { width: 20px; height: 20px; accent-color: var(--gold); }
+
+  .badge {
+    display: inline-block; padding: 4px 10px; border-radius: 99px; font-size: 0.75rem;
+    font-weight: 800; background: rgba(245,158,11,0.18); color: var(--gold-light);
+    border: 1px solid rgba(245,158,11,0.4); margin-bottom: 8px;
+  }
+  .hint-box {
+    background: rgba(20,184,166,0.12); border: 1px solid var(--teal);
+    padding: 12px; border-radius: 12px; margin: 12px 0; text-align: center;
+  }
+  .hint-box strong { color: var(--teal-light); font-size: 1.05rem; }
+
+  .timer-display {
+    font-size: 2.1rem; font-weight: 900; text-align: center; padding: 10px;
+    border-radius: 12px; background: #090e1a; border: 2px solid var(--teal);
+    color: var(--teal-light); margin-bottom: 12px;
+  }
+  .timer-display.urgent { border-color: var(--danger); color: var(--danger); animation: pulse 0.6s infinite; }
+  @keyframes pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.03); } }
+
+  table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 0.9rem; }
+  th, td { padding: 10px 8px; text-align: left; border-bottom: 1px solid var(--border); }
+  th { color: var(--muted); font-size: 0.78rem; text-transform: uppercase; }
+
+  .qb-item {
+    background: #090e1a; border: 1px solid var(--border); border-radius: 10px;
+    padding: 10px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; gap: 8px;
+  }
+  .qb-item-text { font-size: 0.85rem; }
+  .qb-item-text span { display: block; color: var(--gold-light); font-weight: 700; margin-top: 2px; }
+
+  .hidden { display: none !important; }
+</style>
 </head>
 <body>
 
+<!-- 4-SLIDE CINEMATIC INTRO OVERLAY (3 SECONDS EACH) -->
+<div id="intro-overlay">
+  <div class="intro-frame">
+    <img id="intro-img" src="" alt="Double Sage Visual">
+  </div>
+  <div class="intro-caption" id="intro-title">DOUBLE SAGE</div>
+  <div class="intro-sub" id="intro-subtitle">Loading Showcase...</div>
+  <div class="intro-progress-wrap">
+    <div class="intro-progress-bar" id="intro-bar"></div>
+  </div>
+  <div class="intro-dots">
+    <div class="intro-dot active" id="dot-0"></div>
+    <div class="intro-dot" id="dot-1"></div>
+    <div class="intro-dot" id="dot-2"></div>
+    <div class="intro-dot" id="dot-3"></div>
+  </div>
+  <div class="intro-actions">
+    <button class="btn btn-teal btn-sm" style="flex:1;" onclick="enableAudioAndStart()">🔊 Start With Sound</button>
+    <button class="btn btn-dark btn-sm" style="flex:1;" onclick="finishIntro()">Skip Intro ⏭️</button>
+  </div>
+</div>
+
+<!-- STICKY HEADER WITH LOUD MUSIC & SFX VOLUME CONTROLS -->
 <header>
-  <div class="brand">
-    <img id="hdrIcon" alt="Double Sage Icon" style="display:none;" />
-    <div id="hdrIconFallback" class="brand-fallback">DS</div>
-    <div>
-      <div class="brand-title">DOUBLE SAGE</div>
-      <div class="brand-sub">Pass &amp; Play Duel</div>
+  <div class="header-top">
+    <div class="brand">
+      <img id="header-icon" class="brand-icon" alt="Icon">
+      <h1>DOUBLE SAGE</h1>
+    </div>
+    <div style="display:flex; gap:6px;">
+      <button class="pill-btn" onclick="startIntroSequence()">🎬 Intro</button>
+      <button class="pill-btn" onclick="toggleQBModal()">📚 My QB's (<span id="qb-count-badge">0</span>)</button>
     </div>
   </div>
-  <div class="header-actions">
-    <button class="pill-btn" onclick="openQBModal()">📚 My QB's</button>
-    <button class="pill-btn" id="sfxBtn" onclick="toggleSFX()">🔊 SFX ON</button>
+  <div class="audio-bar">
+    <button id="music-toggle" class="pill-btn active" onclick="toggleMusic()">🎵 Music: ON</button>
+    <button id="sfx-toggle" class="pill-btn active" onclick="toggleSFX()">🔊 SFX: ON</button>
+    <div class="vol-wrap">
+      <label for="master-vol">Vol <span id="vol-pct">85%</span></label>
+      <input type="range" id="master-vol" min="0" max="100" value="85" oninput="updateVolume(this.value)">
+    </div>
   </div>
 </header>
 
 <main>
-  <!-- SETUP SCREEN -->
-  <section id="setupScreen">
-    <!-- Hero Showcase with Smart Multi-Extension Image Loader -->
-    <div class="hero-box" id="heroShowcase">
-      <img id="imgBanner" class="hero-banner" alt="Double Sage Banner" style="display:none;" />
-      <div class="hero-gallery" id="heroGallery" style="display:none;">
-        <div class="hero-card" id="cardBattle" style="display:none;">
-          <img id="imgBattle" alt="1v1 Battle Mode" />
-          <div class="hero-tag">⚔️ 1v1 Head-to-Head Duel</div>
-        </div>
-        <div class="hero-card" id="cardTourney" style="display:none;">
-          <img id="imgTourney" alt="Tournament Mode" />
-          <div class="hero-tag">🏆 2–10 Player Showdown</div>
-        </div>
+  <!-- MY QB'S MODAL / DRAWER -->
+  <section id="qb-drawer" class="card hidden">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+      <h2 style="margin:0;">📚 My QB's (Saved Question Bank)</h2>
+      <button class="btn btn-dark btn-sm" onclick="toggleQBModal()">Close ✕</button>
+    </div>
+    <p class="sub">Save your favorite custom questions & answers permanently on this device so you never have to retype them every round.</p>
+    <label class="field-label">New QB Question</label>
+    <input type="text" id="new-qb-q" placeholder="e.g. What year was the first iPhone released?">
+    <label class="field-label">Secret Answer</label>
+    <input type="text" id="new-qb-a" placeholder="e.g. 2007">
+    <button class="btn btn-teal" onclick="addNewQBFromDrawer()">➕ Save Question to My QB's</button>
+    <div id="qb-list-container" style="margin-top:14px; max-height:240px; overflow-y:auto;"></div>
+  </section>
+
+  <!-- SCREEN 1: SETUP -->
+  <section id="screen-setup" class="card">
+    <div class="hero-strip">
+      <div class="hero-thumb" onclick="startIntroSequence()"><img id="thumb-0" alt="Icon"></div>
+      <div class="hero-thumb" onclick="startIntroSequence()"><img id="thumb-1" alt="Battle"></div>
+      <div class="hero-thumb" onclick="startIntroSequence()"><img id="thumb-2" alt="Banner"></div>
+      <div class="hero-thumb" onclick="startIntroSequence()"><img id="thumb-3" alt="Tournament"></div>
+    </div>
+
+    <h2>Same-Phone Pass & Play Setup</h2>
+    <p class="sub">Outsmart, outguess, and outscore! +5 points for a right guess, +5 points to the Asker if stumped. Ties break by fastest answering time.</p>
+
+    <div class="grid-2">
+      <div>
+        <label class="field-label">Number of Players (2–10)</label>
+        <input type="number" id="num-players" min="2" max="10" value="2" onchange="renderPlayerInputs()">
+      </div>
+      <div>
+        <label class="field-label">Questions Per Player</label>
+        <input type="number" id="q-per-player" min="1" max="20" value="3">
       </div>
     </div>
 
-    <div class="card">
-      <h2>Match Setup</h2>
+    <label class="field-label">Time Limit Per Question (10s – 60s)</label>
+    <select id="time-limit">
+      <option value="10">10 Seconds (Blitz)</option>
+      <option value="15">15 Seconds (Fast)</option>
+      <option value="20">20 Seconds</option>
+      <option value="30" selected>30 Seconds (Standard)</option>
+      <option value="45">45 Seconds</option>
+      <option value="60">60 Seconds (Deep Think)</option>
+    </select>
 
-      <div class="toggle-row">
-        <div>
-          <strong style="color:var(--gold); font-size:14px;">🧑‍⚖️ Umpire (Organizer) Mode</strong>
-          <div style="font-size:11px; color:var(--muted);">Umpire sets all questions &amp; rules are final (no contest).</div>
-        </div>
-        <input type="checkbox" id="umpireToggle" onchange="renderPlayerInputs()" />
+    <div class="switch-row">
+      <div>
+        <strong style="font-size:0.92rem; color:var(--gold-light);">🧑‍⚖️ Umpire (Organizer) Mode</strong>
+        <div style="font-size:0.78rem; color:var(--muted);">Umpire sets all questions &amp; rules are final (no contest).</div>
       </div>
+      <input type="checkbox" id="umpire-mode" onchange="toggleUmpireInput()">
+    </div>
 
-      <div id="umpireNameBox" class="hidden">
-        <label>Umpire Name</label>
-        <input type="text" id="umpireNameInput" placeholder="e.g., Coach Alex" value="Umpire" />
+    <div id="umpire-name-wrap" class="hidden">
+      <label class="field-label">Umpire Name</label>
+      <input type="text" id="umpire-name" value="The Umpire">
+    </div>
+
+    <div id="player-names-container"></div>
+
+    <button class="btn btn-gold" onclick="startGame()">🚀 Start Double Sage Match</button>
+  </section>
+
+  <!-- SCREEN 2: PASS PHONE TO ASKER / UMPIRE -->
+  <section id="screen-pass-asker" class="card hidden" style="text-align:center;">
+    <span class="badge" id="round-badge-1">ROUND 1</span>
+    <h2 id="pass-asker-title">Pass the Phone to Player 1</h2>
+    <p class="sub" id="pass-asker-sub">Keep the screen hidden from the guesser while setting the question and secret answer!</p>
+    <button class="btn btn-gold" onclick="openAskerScreen()">👁️ I Have the Phone — Set Question</button>
+  </section>
+
+  <!-- SCREEN 3: ASKER / UMPIRE SETS QUESTION -->
+  <section id="screen-asker" class="card hidden">
+    <span class="badge" id="asker-role-badge">ASKER TURN</span>
+    <h2 id="asker-prompt-heading">Set Your Trap</h2>
+
+    <div style="background:var(--card-alt); padding:10px; border-radius:12px; margin-bottom:10px; border:1px solid var(--border);">
+      <label class="field-label" style="margin-top:0;">⚡ Quick Load (Editable)</label>
+      <div class="grid-2">
+        <select id="qb-select" onchange="loadFromQBSelect(this.value)">
+          <option value="">-- 📚 My QB's --</option>
+        </select>
+        <select id="starter-select" onchange="loadFromStarterSelect(this.value)">
+          <option value="">-- 💡 Starter Prompts --</option>
+        </select>
       </div>
+      <button class="btn btn-dark btn-sm" style="width:100%; margin-top:8px;" onclick="loadNextUnusedQB()">🎲 Auto-Fill Next Unused QB</button>
+    </div>
 
-      <div class="row">
-        <div>
-          <label>Competing Players (2–10)</label>
-          <select id="playerCount" onchange="renderPlayerInputs()">
-            <option value="2" selected>2 Players</option>
-            <option value="3">3 Players</option>
-            <option value="4">4 Players</option>
-            <option value="5">5 Players</option>
-            <option value="6">6 Players</option>
-            <option value="7">7 Players</option>
-            <option value="8">8 Players</option>
-            <option value="9">9 Players</option>
-            <option value="10">10 Players</option>
-          </select>
-        </div>
-        <div>
-          <label>Questions Per Player</label>
-          <select id="questionsPerPlayer">
-            <option value="1">1 Question</option>
-            <option value="2">2 Questions</option>
-            <option value="3" selected>3 Questions</option>
-            <option value="4">4 Questions</option>
-            <option value="5">5 Questions</option>
-            <option value="7">7 Questions</option>
-            <option value="10">10 Questions</option>
-          </select>
-        </div>
-      </div>
+    <label class="field-label">Question for <span id="target-guesser-label" style="color:var(--teal-light);">Guesser</span></label>
+    <textarea id="question-input" rows="2" placeholder="Type or edit your question here..."></textarea>
 
-      <label>Time Limit Per Question (10s – 60s)</label>
-      <select id="timeLimit">
-        <option value="10">10 Seconds (Blitz)</option>
-        <option value="15">15 Seconds</option>
-        <option value="20">20 Seconds</option>
-        <option value="30" selected>30 Seconds (Standard)</option>
-        <option value="45">45 Seconds</option>
-        <option value="60">60 Seconds (Deep Think)</option>
-      </select>
+    <label class="field-label">Secret Answer (Manager counts words, letters &amp; digits)</label>
+    <input type="text" id="answer-input" placeholder="Type exact answer...">
 
-      <h3>Player Names</h3>
-      <div id="playerInputs"></div>
-
-      <button class="btn btn-gold" onclick="startGame()">🚀 Start Match</button>
+    <div style="display:flex; gap:8px; margin-top:10px;">
+      <button class="btn btn-dark btn-sm" style="flex:1;" onclick="saveCurrentToQB()">💾 Save to My QB's</button>
+      <button class="btn btn-gold btn-sm" style="flex:1;" onclick="lockQuestion()">🔒 Lock &amp; Pass to Guesser</button>
     </div>
   </section>
 
-  <!-- HANDOFF TO ASKER / UMPIRE -->
-  <section id="askerHandoffScreen" class="hidden">
-    <div class="card" style="text-align:center;">
-      <span class="badge" id="roundBadge">ROUND 1</span>
-      <h2 style="margin-top:10px;" id="askerHandoffTitle">Pass Phone to Player 1</h2>
-      <p style="color:var(--muted); font-size:14px;" id="askerHandoffSub">
-        Everyone else look away! You are setting the trap for Player 2.
-      </p>
-      <button class="btn btn-gold" onclick="showAskerScreen()">I Have the Phone — Set Question</button>
-    </div>
+  <!-- SCREEN 4: PASS PHONE TO GUESSER -->
+  <section id="screen-pass-guesser" class="card hidden" style="text-align:center;">
+    <span class="badge">ANSWER LOCKED</span>
+    <h2 id="pass-guesser-title">Pass the Phone to Guesser</h2>
+    <p class="sub">The countdown starts the moment you tap the button below!</p>
+    <button class="btn btn-teal" onclick="startGuesserTurn()">⏱️ Reveal Question &amp; Start Timer</button>
   </section>
 
-  <!-- ASKER / UMPIRE QUESTION ENTRY -->
-  <section id="askerScreen" class="hidden">
-    <div class="card">
-      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-        <span class="badge" id="askerRoleBadge">ASKER TURN</span>
-        <span style="font-size:12px; color:var(--muted);" id="targetGuesserLabel">Target: Player 2</span>
-      </div>
-      <h2 id="askerHeader">Set Your Question &amp; Secret Answer</h2>
+  <!-- SCREEN 5: GUESSER ANSWERS -->
+  <section id="screen-guesser" class="card hidden">
+    <div class="timer-display" id="timer-box">30.0s</div>
+    <span class="badge" id="guesser-badge">GUESSING</span>
+    <h2 id="display-question" style="color:#fff; line-height:1.4;">Question appears here</h2>
 
-      <label>Load from Your Saved QB's or Starter Prompts (Editable)</label>
-      <select id="promptSelector" onchange="applySelectedPrompt()">
-        <option value="">-- Choose a QB or Starter Prompt (Optional) --</option>
-      </select>
-      <div class="row" style="margin-bottom:8px;">
-        <button class="btn btn-ghost" style="padding:9px; font-size:12px;" onclick="loadNextUnusedQB()">⚡ Next Unused QB</button>
-        <button class="btn btn-ghost" style="padding:9px; font-size:12px;" onclick="saveCurrentToQB()">💾 Save to My QB's</button>
-      </div>
-
-      <label>Question for Guesser</label>
-      <textarea id="questionInput" rows="2" placeholder="Type or edit your question here..."></textarea>
-
-      <label>Secret Answer (Exact words/numbers)</label>
-      <input type="text" id="answerInput" placeholder="e.g., 1969 or Mount Everest" autocomplete="off" />
-
-      <button class="btn btn-teal" onclick="lockQuestion()">🔒 Lock Answer &amp; Pass Phone</button>
+    <div class="hint-box">
+      <div style="font-size:0.75rem; color:var(--muted); text-transform:uppercase; letter-spacing:1px;">Manager Hint</div>
+      <strong id="display-hint">1 word, 5 letters</strong>
     </div>
+
+    <label class="field-label">Your Answer</label>
+    <input type="text" id="guess-input" placeholder="Type your guess quickly..." onkeydown="if(event.key==='Enter') submitGuess()">
+    <button class="btn btn-teal" onclick="submitGuess()">✅ Submit Answer</button>
   </section>
 
-  <!-- HANDOFF TO GUESSER -->
-  <section id="guesserHandoffScreen" class="hidden">
-    <div class="card" style="text-align:center;">
-      <span class="badge">ANSWER LOCKED</span>
-      <h2 style="margin-top:10px;" id="guesserHandoffTitle">Pass Phone to Player 2</h2>
-      <p style="color:var(--muted); font-size:14px;">
-        Your timer (<strong id="handoffTimerPreview">30s</strong>) starts the moment you reveal the question!
-      </p>
-      <button class="btn btn-teal" onclick="startGuesserTurn()">⏱️ Reveal Question &amp; Start Clock</button>
+  <!-- SCREEN 6: ROUND RESULT & TWO-STEP CONTEST APPROVAL -->
+  <section id="screen-result" class="card hidden">
+    <h2 id="result-headline">Result</h2>
+    <p class="sub" id="result-details"></p>
+
+    <div style="background:#090e1a; padding:12px; border-radius:12px; border:1px solid var(--border); margin-bottom:12px; font-size:0.9rem;">
+      <div><strong>Question:</strong> <span id="res-q"></span></div>
+      <div style="margin-top:4px;"><strong>Guesser Typed:</strong> <span id="res-guess" style="color:var(--teal-light);"></span></div>
+      <div style="margin-top:4px;"><strong>Locked Answer:</strong> <span id="res-ans" style="color:var(--gold-light);"></span></div>
     </div>
-  </section>
 
-  <!-- GUESSER TURN -->
-  <section id="guesserScreen" class="hidden">
-    <div class="card">
-      <div style="display:flex; justify-content:space-between; align-items:center;">
-        <span class="badge" id="guesserTurnBadge">GUESSER TURN</span>
-        <span style="font-size:12px; color:var(--muted);" id="guesserProgress">1 / 3</span>
-      </div>
-      <div class="timer-box" id="timerDisplay">30.0s</div>
-
-      <div style="background:var(--card-alt); padding:14px; border-radius:12px; border:1px solid var(--border); margin:10px 0;">
-        <div style="font-size:11px; color:var(--muted); text-transform:uppercase; margin-bottom:4px;">Question</div>
-        <div style="font-size:17px; font-weight:700;" id="revealedQuestion"></div>
-      </div>
-
-      <div class="hint-pill" id="managerHintBox">MANAGER HINT: 1 word, 4 digits</div>
-
-      <label>Your Guess</label>
-      <input type="text" id="guessInput" placeholder="Type your answer fast..." autocomplete="off" onkeydown="if(event.key==='Enter') submitGuess(false)" />
-
-      <button class="btn btn-gold" onclick="submitGuess(false)">✅ Submit Answer</button>
+    <!-- CONTEST BUTTON (Only shown in Standard Mode when Guesser was marked wrong) -->
+    <div id="contest-trigger-box" class="hidden">
+      <button class="btn btn-danger" onclick="openContestApproval()">🚩 CONTEST ANSWER (Dispute Result)</button>
     </div>
-  </section>
 
-  <!-- ROUND RESULT & CONTEST -->
-  <section id="resultScreen" class="hidden">
-    <div class="card" style="text-align:center;">
-      <h2 id="resultHeadline">Result</h2>
-      <p id="resultDetails" style="font-size:14px; color:var(--text); line-height:1.5;"></p>
-
-      <div style="background:var(--card-alt); padding:12px; border-radius:12px; margin:12px 0; text-align:left; font-size:13px;">
-        <div><span style="color:var(--muted);">Guesser Typed:</span> <strong id="resTyped"></strong></div>
-        <div style="margin-top:4px;"><span style="color:var(--muted);">Secret Answer:</span> <strong style="color:var(--gold);" id="resActual"></strong></div>
-        <div style="margin-top:4px;"><span style="color:var(--muted);">Time Spent:</span> <strong style="color:var(--teal);" id="resTime"></strong></div>
-      </div>
-
-      <button id="contestBtn" class="btn btn-danger hidden" onclick="triggerContest()">⚠️ CONTEST ANSWER (Dispute Result)</button>
-      <button class="btn btn-gold" onclick="confirmRoundAndNext()">Continue ➡️</button>
+    <!-- ASKER APPROVAL PANEL -->
+    <div id="contest-approval-box" class="hidden" style="background:rgba(239,68,68,0.12); border:1px solid var(--danger); padding:14px; border-radius:12px; margin-top:10px;">
+      <h3 style="color:#fca5a5;">⚖️ Asker Verification Required</h3>
+      <p class="sub" id="contest-prompt-text" style="margin-bottom:10px;"></p>
+      <button class="btn btn-success" onclick="resolveContest(true)">✅ Accept Guess (+5 Pts to Guesser)</button>
+      <button class="btn btn-gold" onclick="resolveContest(false)">🔄 Void &amp; Send New Question (0 Pts)</button>
     </div>
-  </section>
 
-  <!-- CONTEST APPROVAL (STANDARD MODE ONLY) -->
-  <section id="contestScreen" class="hidden">
-    <div class="card">
-      <span class="badge" style="background:rgba(244,63,94,0.2); color:var(--danger);">CONTEST RAISED</span>
-      <h2 style="margin-top:8px;" id="contestAskerTitle">Pass Phone to Asker to Rule</h2>
-      <p style="font-size:13px; color:var(--muted);" id="contestSummary"></p>
-
-      <button class="btn btn-teal" onclick="resolveContest('accept')">
-        ✅ Accept Guess (+5 Pts to Guesser)
-      </button>
-      <button class="btn btn-danger" onclick="resolveContest('reask')">
-        🔄 Void &amp; Send New Question (0 Pts)
-      </button>
+    <div id="normal-next-box">
+      <button class="btn btn-gold" onclick="confirmRoundAndProceed()">➡️ Confirm &amp; Continue</button>
     </div>
   </section>
 
   <!-- LIVE SCOREBOARD -->
-  <section id="scoreboardSection" class="hidden">
-    <div class="card">
-      <h3>📊 Live Standings (Points • Shortest Time Wins Ties)</h3>
-      <div id="liveScoresList"></div>
-    </div>
+  <section id="scoreboard-card" class="card hidden">
+    <h3>🏆 Live Scoreboard (Tie-Breaker: Shortest Time)</h3>
+    <table>
+      <thead>
+        <tr><th>Rank</th><th>Player</th><th>Points</th><th>Time Spent</th></tr>
+      </thead>
+      <tbody id="scoreboard-body"></tbody>
+    </table>
   </section>
 
-  <!-- GAME OVER -->
-  <section id="gameOverScreen" class="hidden">
-    <div class="card" style="text-align:center;">
-      <span class="badge">MATCH COMPLETE</span>
-      <h2 style="font-size:24px; margin-top:8px;" id="winnerHeadline">🏆 Winner!</h2>
-      <p style="font-size:13px; color:var(--muted);" id="winnerSub"></p>
-      <div id="finalScoresList" style="text-align:left; margin:14px 0;"></div>
-      <button class="btn btn-gold" onclick="resetToSetup()">🔁 Play Again</button>
-    </div>
+  <!-- SCREEN 7: GAME OVER -->
+  <section id="screen-gameover" class="card hidden" style="text-align:center;">
+    <span class="badge">MATCH COMPLETE</span>
+    <h2 id="winner-banner" style="font-size:1.5rem;">🏆 Champion!</h2>
+    <p class="sub" id="winner-sub"></p>
+    <table>
+      <thead>
+        <tr><th>Rank</th><th>Player</th><th>Points</th><th>Total Time</th></tr>
+      </thead>
+      <tbody id="final-scoreboard-body"></tbody>
+    </table>
+    <button class="btn btn-gold" onclick="location.reload()">🔁 Play Again</button>
   </section>
 </main>
 
-<!-- QB'S MODAL -->
-<div id="qbModal" class="modal-backdrop hidden">
-  <div class="modal-card">
-    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
-      <h2 style="margin:0;">📚 My QB's (Question Banks)</h2>
-      <button class="pill-btn" onclick="closeQBModal()">✕ Close</button>
-    </div>
-    <p style="font-size:12px; color:var(--muted); margin-top:0;">
-      Save your favorite questions &amp; answers here so you can pick them in 1 tap during any round.
-    </p>
-    <label>New Question</label>
-    <input type="text" id="qbNewQ" placeholder="e.g., How many keys are on a standard piano?" />
-    <label>Secret Answer</label>
-    <input type="text" id="qbNewA" placeholder="e.g., 88" />
-    <button class="btn btn-teal" onclick="addQBItem()">➕ Add to My QB's</button>
-
-    <h3 style="margin-top:14px;">Saved Questions (<span id="qbCount">0</span>)</h3>
-    <div id="qbListContainer"></div>
-  </div>
-</div>
-
 <script>
-  /* ================= SMART MULTI-EXTENSION IMAGE LOADER ================= */
-  function loadSmartImage(imgEl, baseNames, onSuccess) {
-    const exts = ['.jpg', '.jpeg', '.png', '.JPG', '.JPEG', '.PNG'];
-    const candidates = [];
-    baseNames.forEach(base => {
-      exts.forEach(ext => candidates.push(base + ext));
-    });
-    let idx = 0;
-    function tryNext() {
-      if (idx >= candidates.length) return;
-      const src = candidates[idx++];
-      const tester = new Image();
-      tester.onload = () => {
-        imgEl.src = src;
-        imgEl.style.display = 'block';
-        if (onSuccess) onSuccess();
-      };
-      tester.onerror = tryNext;
-      tester.src = src;
-    }
-    tryNext();
-  }
+/* ============================================================================
+   1. SMART MULTI-EXTENSION IMAGE LOADER (.jpg / .jpeg / .png)
+   ============================================================================ */
+const IMAGE_SLOTS = [
+  { key: 'icon', candidates: ['double_sage_icon.jpg', 'double_sage_icon.jpeg', 'double_sage_icon.png', 'icon.jpg', 'icon.png'], title: 'DOUBLE SAGE', sub: 'Outsmart • Outguess • Outscore' },
+  { key: 'battle', candidates: ['double_sage_battle.jpg', 'double_sage_battle.jpeg', 'double_sage_battle.png', 'battle.jpg', 'battle.png'], title: 'HEAD-TO-HEAD DUELS', sub: 'Read Your Opponent & Beat the Clock' },
+  { key: 'banner', candidates: ['double_sage_banner.jpg', 'double_sage_banner.jpeg', 'double_sage_banner.png', 'banner.jpg', 'banner.png'], title: '2 TO 10 PLAYERS', sub: 'Same-Phone Pass & Play or Umpire Mode' },
+  { key: 'tournament', candidates: ['double_sage_tournament.jpg', 'double_sage_tournament.jpeg', 'double_sage_tournament.png', 'tournament.jpg', 'tournament.png'], title: 'FASTEST TIME WINS TIES', sub: 'Every Second Counts Toward Victory' }
+];
+const resolvedImages = {};
 
-  window.addEventListener('DOMContentLoaded', () => {
-    loadSmartImage(document.getElementById('hdrIcon'), ['double_sage_icon', 'icon'], () => {
-      document.getElementById('hdrIconFallback').style.display = 'none';
-    });
-    loadSmartImage(document.getElementById('imgBanner'), ['double_sage_banner', 'banner']);
-    loadSmartImage(document.getElementById('imgBattle'), ['double_sage_battle', 'battle'], () => {
-      document.getElementById('heroGallery').style.display = 'grid';
-      document.getElementById('cardBattle').style.display = 'block';
-    });
-    loadSmartImage(document.getElementById('imgTourney'), ['double_sage_tournament', 'tournament'], () => {
-      document.getElementById('heroGallery').style.display = 'grid';
-      document.getElementById('cardTourney').style.display = 'block';
-    });
-    renderPlayerInputs();
-  });
-
-  /* ================= WEB AUDIO SFX & HAPTICS ================= */
-  let sfxEnabled = true;
-  let audioCtx = null;
-
-  function toggleSFX() {
-    sfxEnabled = !sfxEnabled;
-    document.getElementById('sfxBtn').textContent = sfxEnabled ? '🔊 SFX ON' : '🔇 SFX OFF';
-  }
-
-  function playTone(freq, type = 'sine', duration = 0.15, delay = 0) {
-    if (!sfxEnabled) return;
-    try {
-      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-      const osc = audioCtx.createOscillator();
-      const gain = audioCtx.createGain();
-      osc.type = type;
-      osc.frequency.setValueAtTime(freq, audioCtx.currentTime + delay);
-      gain.gain.setValueAtTime(0.14, audioCtx.currentTime + delay);
-      gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + delay + duration);
-      osc.connect(gain);
-      gain.connect(audioCtx.destination);
-      osc.start(audioCtx.currentTime + delay);
-      osc.stop(audioCtx.currentTime + delay + duration);
-    } catch (e) {}
-  }
-
-  function sfxLock() { playTone(520, 'triangle', 0.12, 0); playTone(780, 'triangle', 0.18, 0.1); if (navigator.vibrate) navigator.vibrate(40); }
-  function sfxTick(urgent) { playTone(urgent ? 920 : 600, 'sine', 0.06, 0); if (urgent && navigator.vibrate) navigator.vibrate(25); }
-  function sfxWin() { playTone(523, 'triangle', 0.14, 0); playTone(659, 'triangle', 0.14, 0.12); playTone(784, 'triangle', 0.25, 0.24); if (navigator.vibrate) navigator.vibrate([60, 40, 80]); }
-  function sfxWrong() { playTone(220, 'sawtooth', 0.25, 0); playTone(170, 'sawtooth', 0.3, 0.15); if (navigator.vibrate) navigator.vibrate(150); }
-  function sfxContest() { playTone(440, 'square', 0.12, 0); playTone(620, 'square', 0.18, 0.12); }
-
-  /* ================= STARTER PROMPTS & QB'S ================= */
-  const STARTER_PROMPTS = [
-    { q: "What year did the first human walk on the Moon?", a: "1969" },
-    { q: "How many players are on a standard soccer team on the field?", a: "11" },
-    { q: "What is the chemical symbol for Gold?", a: "Au" },
-    { q: "Which planet is known as the Red Planet?", a: "Mars" },
-    { q: "How many continents are there on Earth?", a: "7" },
-    { q: "What is the capital city of Japan?", a: "Tokyo" },
-    { q: "How many minutes are in 2 hours?", a: "120" },
-    { q: "Who painted the Mona Lisa?", a: "Leonardo da Vinci" }
-  ];
-
-  function getQBs() {
-    try { return JSON.parse(localStorage.getItem('double_sage_qbs') || '[]'); }
-    catch (e) { return []; }
-  }
-  function saveQBs(list) {
-    localStorage.setItem('double_sage_qbs', JSON.stringify(list));
-  }
-
-  function openQBModal() {
-    renderQBList();
-    document.getElementById('qbModal').classList.remove('hidden');
-  }
-  function closeQBModal() {
-    document.getElementById('qbModal').classList.add('hidden');
-    populatePromptDropdown();
-  }
-  function addQBItem() {
-    const q = document.getElementById('qbNewQ').value.trim();
-    const a = document.getElementById('qbNewA').value.trim();
-    if (!q || !a) return alert('Enter both a question and secret answer.');
-    const list = getQBs();
-    list.unshift({ q, a });
-    saveQBs(list);
-    document.getElementById('qbNewQ').value = '';
-    document.getElementById('qbNewA').value = '';
-    renderQBList();
-    sfxLock();
-  }
-  function deleteQBItem(index) {
-    const list = getQBs();
-    list.splice(index, 1);
-    saveQBs(list);
-    renderQBList();
-  }
-  function renderQBList() {
-    const list = getQBs();
-    document.getElementById('qbCount').textContent = list.length;
-    const box = document.getElementById('qbListContainer');
-    if (!list.length) {
-      box.innerHTML = '<div style="font-size:13px; color:var(--muted);">No saved questions yet. Add one above!</div>';
+function resolveImageCandidates(slot, callback) {
+  let idx = 0;
+  function tryNext() {
+    if (idx >= slot.candidates.length) {
+      // Fallback SVG data URI if file isn't present locally
+      const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="600" height="400"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#0f172a"/><stop offset="100%" stop-color="#1e293b"/></linearGradient></defs><rect width="600" height="400" fill="url(#g)"/><circle cx="300" cy="170" r="65" fill="none" stroke="#f59e0b" stroke-width="8"/><circle cx="300" cy="170" r="42" fill="none" stroke="#14b8a6" stroke-width="6"/><text x="300" y="295" font-family="sans-serif" font-size="32" font-weight="bold" fill="#fcd34d" text-anchor="middle">${slot.title}</text><text x="300" y="330" font-family="sans-serif" font-size="16" fill="#94a3b8" text-anchor="middle">${slot.sub}</text></svg>`;
+      resolvedImages[slot.key] = 'data:image/svg+xml;utf8,' + encodeURIComponent(svg);
+      callback(resolvedImages[slot.key]);
       return;
     }
-    box.innerHTML = list.map((item, i) => `
-      <div class="qb-item">
-        <div style="font-size:13px;">
-          <div><strong>Q:</strong> ${escapeHtml(item.q)}</div>
-          <div style="color:var(--gold); font-size:12px;"><strong>A:</strong> ${escapeHtml(item.a)}</div>
-        </div>
-        <button class="pill-btn" style="color:var(--danger);" onclick="deleteQBItem(${i})">🗑️</button>
-      </div>
-    `).join('');
+    const testImg = new Image();
+    const src = slot.candidates[idx++];
+    testImg.onload = () => { resolvedImages[slot.key] = src; callback(src); };
+    testImg.onerror = tryNext;
+    testImg.src = src;
   }
+  tryNext();
+}
 
-  function escapeHtml(str) {
-    return str.replace(/[&<>"']/g, m => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[m]));
-  }
+/* ============================================================================
+   2. 4-SLIDE INTRO SPLASH SEQUENCE (3 SECONDS PER IMAGE)
+   ============================================================================ */
+let introTimer = null;
+let progressInterval = null;
+let currentSlide = 0;
 
-  /* ================= GAME STATE ================= */
-  let state = {};
-  let timerInterval = null;
+function startIntroSequence() {
+  clearInterval(introTimer);
+  clearInterval(progressInterval);
+  currentSlide = 0;
+  const overlay = document.getElementById('intro-overlay');
+  overlay.classList.remove('hidden');
+  showIntroSlide(0);
 
-  function renderPlayerInputs() {
-    const count = parseInt(document.getElementById('playerCount').value, 10);
-    const isUmpire = document.getElementById('umpireToggle').checked;
-    document.getElementById('umpireNameBox').classList.toggle('hidden', !isUmpire);
-    const container = document.getElementById('playerInputs');
-    let html = '';
-    for (let i = 1; i <= count; i++) {
-      html += `<input type="text" id="pName_${i}" placeholder="Player ${i} Name" value="Player ${i}" />`;
-    }
-    container.innerHTML = html;
-  }
-
-  function generateManagerHint(answer) {
-    const clean = answer.trim();
-    const words = clean.split(/\s+/).filter(Boolean).length;
-    const letters = (clean.match(/[a-zA-Z]/g) || []).length;
-    const digits = (clean.match(/[0-9]/g) || []).length;
-
-    const parts = [];
-    parts.push(`${words} ${words === 1 ? 'word' : 'words'}`);
-    if (letters > 0) parts.push(`${letters} ${letters === 1 ? 'letter' : 'letters'}`);
-    if (digits > 0) parts.push(`${digits} ${digits === 1 ? 'digit' : 'digits'}`);
-    return parts.join(', ');
-  }
-
-  function startGame() {
-    const count = parseInt(document.getElementById('playerCount').value, 10);
-    const qPerPlayer = parseInt(document.getElementById('questionsPerPlayer').value, 10);
-    const timeLimit = parseInt(document.getElementById('timeLimit').value, 10);
-    const isUmpire = document.getElementById('umpireToggle').checked;
-    const umpireName = document.getElementById('umpireNameInput').value.trim() || 'Umpire';
-
-    const players = [];
-    for (let i = 1; i <= count; i++) {
-      const name = document.getElementById(`pName_${i}`).value.trim() || `Player ${i}`;
-      players.push({ id: i - 1, name, points: 0, timeSpent: 0, answeredCount: 0 });
-    }
-
-    // Build turn queue so every player answers exactly qPerPlayer questions
-    const turns = [];
-    for (let r = 0; r < qPerPlayer; r++) {
-      for (let p = 0; p < count; p++) {
-        const guesserIdx = p;
-        const askerIdx = isUmpire ? -1 : (p + 1 + r) % count;
-        turns.push({ askerIdx, guesserIdx });
-      }
-    }
-
-    state = {
-      players,
-      isUmpire,
-      umpireName,
-      timeLimit,
-      turns,
-      turnIndex: 0,
-      usedQBs: new Set(),
-      currentQ: '',
-      currentA: '',
-      turnStartTime: 0,
-      pendingOutcome: null
-    };
-
-    sfxLock();
-    hideAllScreens();
-    document.getElementById('scoreboardSection').classList.remove('hidden');
-    updateScoreboardUI();
-    prepareTurn();
-  }
-
-  function hideAllScreens() {
-    ['setupScreen','askerHandoffScreen','askerScreen','guesserHandoffScreen','guesserScreen','resultScreen','contestScreen','gameOverScreen']
-      .forEach(id => document.getElementById(id).classList.add('hidden'));
-  }
-
-  function prepareTurn() {
-    if (state.turnIndex >= state.turns.length) {
-      return finishGame();
-    }
-    const turn = state.turns[state.turnIndex];
-    const askerName = state.isUmpire ? state.umpireName : state.players[turn.askerIdx].name;
-    const guesserName = state.players[turn.guesserIdx].name;
-
-    hideAllScreens();
-    document.getElementById('roundBadge').textContent = `TURN ${state.turnIndex + 1} OF ${state.turns.length}`;
-    document.getElementById('askerHandoffTitle').textContent = `Pass Phone to ${askerName}`;
-    document.getElementById('askerHandoffSub').textContent = `${guesserName}, look away! ${askerName} is setting the question.`;
-    document.getElementById('askerHandoffScreen').classList.remove('hidden');
-  }
-
-  function populatePromptDropdown() {
-    const sel = document.getElementById('promptSelector');
-    const qbs = getQBs();
-    let html = `<option value="">-- Choose a Saved QB or Starter Prompt --</option>`;
-    if (qbs.length) {
-      html += `<optgroup label="📚 My Saved QB's">`;
-      qbs.forEach((item, idx) => {
-        html += `<option value="qb_${idx}">${escapeHtml(item.q)} (${escapeHtml(item.a)})</option>`;
-      });
-      html += `</optgroup>`;
-    }
-    html += `<optgroup label="⚡ Built-In Starter Prompts">`;
-    STARTER_PROMPTS.forEach((item, idx) => {
-      html += `<option value="st_${idx}">${escapeHtml(item.q)}</option>`;
-    });
-    html += `</optgroup>`;
-    sel.innerHTML = html;
-  }
-
-  function applySelectedPrompt() {
-    const val = document.getElementById('promptSelector').value;
-    if (!val) return;
-    const [type, idxStr] = val.split('_');
-    const idx = parseInt(idxStr, 10);
-    const item = type === 'qb' ? getQBs()[idx] : STARTER_PROMPTS[idx];
-    if (item) {
-      document.getElementById('questionInput').value = item.q;
-      document.getElementById('answerInput').value = item.a;
-      if (type === 'qb') state.usedQBs.add(idx);
-    }
-  }
-
-  function loadNextUnusedQB() {
-    const qbs = getQBs();
-    if (!qbs.length) return alert("You don't have any saved QB's yet! Tap 'My QB's' at the top or type a question and tap 'Save to My QB's'.");
-    let foundIdx = qbs.findIndex((_, i) => !state.usedQBs.has(i));
-    if (foundIdx === -1) {
-      state.usedQBs.clear();
-      foundIdx = 0;
-    }
-    state.usedQBs.add(foundIdx);
-    document.getElementById('questionInput').value = qbs[foundIdx].q;
-    document.getElementById('answerInput').value = qbs[foundIdx].a;
-    sfxLock();
-  }
-
-  function saveCurrentToQB() {
-    const q = document.getElementById('questionInput').value.trim();
-    const a = document.getElementById('answerInput').value.trim();
-    if (!q || !a) return alert('Type a question and secret answer first before saving.');
-    const list = getQBs();
-    list.unshift({ q, a });
-    saveQBs(list);
-    populatePromptDropdown();
-    sfxLock();
-    alert('Saved to My QB\'s!');
-  }
-
-  function showAskerScreen() {
-    const turn = state.turns[state.turnIndex];
-    const askerName = state.isUmpire ? state.umpireName : state.players[turn.askerIdx].name;
-    const guesserName = state.players[turn.guesserIdx].name;
-
-    populatePromptDropdown();
-    document.getElementById('questionInput').value = '';
-    document.getElementById('answerInput').value = '';
-    document.getElementById('askerRoleBadge').textContent = state.isUmpire ? '🧑‍⚖️ UMPIRE TURN' : `ASKER: ${askerName.toUpperCase()}`;
-    document.getElementById('targetGuesserLabel').textContent = `Target Guesser: ${guesserName}`;
-    document.getElementById('askerHeader').textContent = `${askerName}, Set Question for ${guesserName}`;
-
-    hideAllScreens();
-    document.getElementById('askerScreen').classList.remove('hidden');
-  }
-
-  function lockQuestion() {
-    const q = document.getElementById('questionInput').value.trim();
-    const a = document.getElementById('answerInput').value.trim();
-    if (!q || !a) return alert('Please enter both a question and a secret answer.');
-
-    state.currentQ = q;
-    state.currentA = a;
-    sfxLock();
-
-    const turn = state.turns[state.turnIndex];
-    const guesserName = state.players[turn.guesserIdx].name;
-
-    hideAllScreens();
-    document.getElementById('guesserHandoffTitle').textContent = `Pass Phone to ${guesserName}`;
-    document.getElementById('handoffTimerPreview').textContent = `${state.timeLimit}s`;
-    document.getElementById('guesserHandoffScreen').classList.remove('hidden');
-  }
-
-  function startGuesserTurn() {
-    const turn = state.turns[state.turnIndex];
-    const guesser = state.players[turn.guesserIdx];
-
-    document.getElementById('guesserTurnBadge').textContent = `GUESSER: ${guesser.name.toUpperCase()}`;
-    document.getElementById('guesserProgress').textContent = `Q ${guesser.answeredCount + 1} / ${document.getElementById('questionsPerPlayer').value}`;
-    document.getElementById('revealedQuestion').textContent = state.currentQ;
-    document.getElementById('managerHintBox').textContent = `MANAGER HINT: ${generateManagerHint(state.currentA)}`;
-    document.getElementById('guessInput').value = '';
-
-    hideAllScreens();
-    document.getElementById('guesserScreen').classList.remove('hidden');
-    document.getElementById('guessInput').focus();
-
-    state.turnStartTime = performance.now();
-    let lastWholeSec = state.timeLimit;
-    const timerEl = document.getElementById('timerDisplay');
-    timerEl.classList.remove('timer-urgent');
-    timerEl.textContent = `${state.timeLimit.toFixed(1)}s`;
-
-    clearInterval(timerInterval);
-    timerInterval = setInterval(() => {
-      const elapsed = (performance.now() - state.turnStartTime) / 1000;
-      const remaining = Math.max(0, state.timeLimit - elapsed);
-      timerEl.textContent = `${remaining.toFixed(1)}s`;
-
-      const whole = Math.ceil(remaining);
-      if (whole < lastWholeSec && whole > 0) {
-        lastWholeSec = whole;
-        if (whole <= 5) {
-          timerEl.classList.add('timer-urgent');
-          sfxTick(true);
-        } else {
-          sfxTick(false);
-        }
-      }
-
-      if (remaining <= 0) {
-        clearInterval(timerInterval);
-        submitGuess(true);
-      }
-    }, 100);
-  }
-
-  function normalizeText(str) {
-    return str.toLowerCase().replace(/[^a-z0-9]/g, '');
-  }
-
-  function submitGuess(timedOut) {
-    clearInterval(timerInterval);
-    const elapsed = Math.min(state.timeLimit, (performance.now() - state.turnStartTime) / 1000);
-    const typed = timedOut ? '(Time Expired)' : (document.getElementById('guessInput').value.trim() || '(Blank)');
-    const isCorrect = !timedOut && normalizeText(typed) === normalizeText(state.currentA);
-
-    const turn = state.turns[state.turnIndex];
-    const guesser = state.players[turn.guesserIdx];
-    const asker = state.isUmpire ? null : state.players[turn.askerIdx];
-
-    state.pendingOutcome = { isCorrect, elapsed, typed };
-
-    hideAllScreens();
-    document.getElementById('resTyped').textContent = typed;
-    document.getElementById('resActual').textContent = state.currentA;
-    document.getElementById('resTime').textContent = `${elapsed.toFixed(2)}s`;
-
-    const contestBtn = document.getElementById('contestBtn');
-
-    if (isCorrect) {
-      sfxWin();
-      document.getElementById('resultHeadline').textContent = `🎉 Spot On, ${guesser.name}!`;
-      document.getElementById('resultHeadline').style.color = 'var(--teal)';
-      document.getElementById('resultDetails').textContent = `+5 Points awarded to ${guesser.name}!`;
-      contestBtn.classList.add('hidden');
-    } else {
-      sfxWrong();
-      document.getElementById('resultHeadline').textContent = timedOut ? `⏰ Time's Up!` : `❌ Not Quite!`;
-      document.getElementById('resultHeadline').style.color = 'var(--danger)';
-      if (state.isUmpire) {
-        document.getElementById('resultDetails').textContent = `0 Points awarded. (Umpire ruling is final)`;
-        contestBtn.classList.add('hidden');
+  let elapsed = 0;
+  const slideDuration = 3000; // 3 seconds per picture
+  progressInterval = setInterval(() => {
+    elapsed += 100;
+    const pct = Math.min(100, (elapsed / slideDuration) * 100);
+    document.getElementById('intro-bar').style.width = pct + '%';
+    if (elapsed >= slideDuration) {
+      elapsed = 0;
+      currentSlide++;
+      if (currentSlide >= IMAGE_SLOTS.length) {
+        finishIntro();
       } else {
-        document.getElementById('resultDetails').textContent = `+5 Points go to ${asker.name} for stumping ${guesser.name}!`;
-        contestBtn.classList.remove('hidden');
+        showIntroSlide(currentSlide);
       }
     }
+  }, 100);
+}
 
-    document.getElementById('resultScreen').classList.remove('hidden');
+function showIntroSlide(index) {
+  const slot = IMAGE_SLOTS[index];
+  const imgEl = document.getElementById('intro-img');
+  // Restart zoom animation
+  imgEl.style.animation = 'none';
+  imgEl.offsetHeight;
+  imgEl.style.animation = 'zoomSlide 3s ease-in-out forwards';
+
+  if (resolvedImages[slot.key]) {
+    imgEl.src = resolvedImages[slot.key];
+  } else {
+    resolveImageCandidates(slot, (src) => { imgEl.src = src; });
+  }
+  document.getElementById('intro-title').textContent = slot.title;
+  document.getElementById('intro-subtitle').textContent = slot.sub;
+  for (let i = 0; i < 4; i++) {
+    document.getElementById('dot-' + i).classList.toggle('active', i === index);
+  }
+}
+
+function finishIntro() {
+  clearInterval(introTimer);
+  clearInterval(progressInterval);
+  document.getElementById('intro-overlay').classList.add('hidden');
+}
+
+function enableAudioAndStart() {
+  initAudio();
+  if (!musicOn) toggleMusic();
+  else startBackgroundMusic();
+  playSFX('lock');
+  finishIntro();
+}
+
+/* ============================================================================
+   3. LOUD WEB AUDIO BACKGROUND MUSIC + SFX + MASTER VOLUME SLIDER
+   ============================================================================ */
+let audioCtx = null;
+let masterGain = null;
+let musicGain = null;
+let sfxGain = null;
+let musicOn = true;
+let sfxOn = true;
+let masterVolume = 0.85;
+let bgmLoop = null;
+let bgmStep = 0;
+
+function initAudio() {
+  if (!audioCtx) {
+    const AudioContext = window.AudioContext || window.webkitAudioContext;
+    audioCtx = new AudioContext();
+    masterGain = audioCtx.createGain();
+    masterGain.gain.value = masterVolume;
+    masterGain.connect(audioCtx.destination);
+
+    musicGain = audioCtx.createGain();
+    musicGain.gain.value = 0.55; // Strong, loud background presence
+    musicGain.connect(masterGain);
+
+    sfxGain = audioCtx.createGain();
+    sfxGain.gain.value = 0.85;
+    sfxGain.connect(masterGain);
+  }
+  if (audioCtx.state === 'suspended') {
+    audioCtx.resume();
+  }
+}
+
+function updateVolume(val) {
+  masterVolume = Number(val) / 100;
+  document.getElementById('vol-pct').textContent = val + '%';
+  if (masterGain && audioCtx) {
+    masterGain.gain.setValueAtTime(masterVolume, audioCtx.currentTime);
+  }
+}
+
+function toggleMusic() {
+  initAudio();
+  musicOn = !musicOn;
+  const btn = document.getElementById('music-toggle');
+  btn.textContent = musicOn ? '🎵 Music: ON' : '🔇 Music: OFF';
+  btn.classList.toggle('active', musicOn);
+  if (musicOn) {
+    startBackgroundMusic();
+  } else {
+    stopBackgroundMusic();
+  }
+}
+
+function toggleSFX() {
+  initAudio();
+  sfxOn = !sfxOn;
+  const btn = document.getElementById('sfx-toggle');
+  btn.textContent = sfxOn ? '🔊 SFX: ON' : '🔕 SFX: OFF';
+  btn.classList.toggle('active', sfxOn);
+  if (sfxOn) playSFX('tick');
+}
+
+function startBackgroundMusic() {
+  if (!musicOn) return;
+  initAudio();
+  if (bgmLoop) return;
+  // Energetic 128 BPM Quiz-Duel Synth Groove
+  const bassNotes = [110, 110, 130.81, 146.83, 110, 110, 164.81, 146.83]; // A2 C3 D3 E3
+  const leadNotes = [440, 523.25, 659.25, 587.33, 523.25, 659.25, 783.99, 659.25];
+  bgmStep = 0;
+
+  bgmLoop = setInterval(() => {
+    if (!musicOn || !audioCtx || audioCtx.state !== 'running') return;
+    const now = audioCtx.currentTime;
+
+    // Punchy Bass Synth
+    const bOsc = audioCtx.createOscillator();
+    const bEnv = audioCtx.createGain();
+    bOsc.type = 'sawtooth';
+    bOsc.frequency.setValueAtTime(bassNotes[bgmStep % bassNotes.length], now);
+    bEnv.gain.setValueAtTime(0.32, now);
+    bEnv.gain.exponentialRampToValueAtTime(0.01, now + 0.22);
+    bOsc.connect(bEnv);
+    bEnv.connect(musicGain);
+    bOsc.start(now);
+    bOsc.stop(now + 0.23);
+
+    // Crisp Melody Arpeggio
+    const lOsc = audioCtx.createOscillator();
+    const lEnv = audioCtx.createGain();
+    lOsc.type = 'triangle';
+    lOsc.frequency.setValueAtTime(leadNotes[bgmStep % leadNotes.length], now);
+    lEnv.gain.setValueAtTime(0.24, now);
+    lEnv.gain.exponentialRampToValueAtTime(0.01, now + 0.20);
+    lOsc.connect(lEnv);
+    lEnv.connect(musicGain);
+    lOsc.start(now);
+    lOsc.stop(now + 0.21);
+
+    bgmStep++;
+  }, 240);
+}
+
+function stopBackgroundMusic() {
+  clearInterval(bgmLoop);
+  bgmLoop = null;
+}
+
+function playSFX(type) {
+  if (!sfxOn) return;
+  initAudio();
+  const now = audioCtx.currentTime;
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  osc.connect(gain);
+  gain.connect(sfxGain);
+
+  if (type === 'lock') {
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(523.25, now);
+    osc.frequency.setValueAtTime(783.99, now + 0.09);
+    gain.gain.setValueAtTime(0.45, now);
+    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.25);
+    osc.start(now); osc.stop(now + 0.26);
+  } else if (type === 'tick') {
+    osc.type = 'square';
+    osc.frequency.setValueAtTime(880, now);
+    gain.gain.setValueAtTime(0.25, now);
+    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.07);
+    osc.start(now); osc.stop(now + 0.08);
+  } else if (type === 'win') {
+    osc.type = 'triangle';
+    [523.25, 659.25, 783.99, 1046.5].forEach((f, i) => osc.frequency.setValueAtTime(f, now + i * 0.09));
+    gain.gain.setValueAtTime(0.55, now);
+    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.45);
+    osc.start(now); osc.stop(now + 0.46);
+    if (navigator.vibrate) navigator.vibrate([80, 40, 120]);
+  } else if (type === 'wrong') {
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(190, now);
+    osc.frequency.linearRampToValueAtTime(120, now + 0.35);
+    gain.gain.setValueAtTime(0.45, now);
+    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.36);
+    osc.start(now); osc.stop(now + 0.37);
+    if (navigator.vibrate) navigator.vibrate(200);
+  } else if (type === 'contest') {
+    osc.type = 'square';
+    osc.frequency.setValueAtTime(440, now);
+    osc.frequency.setValueAtTime(587.33, now + 0.12);
+    gain.gain.setValueAtTime(0.4, now);
+    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.28);
+    osc.start(now); osc.stop(now + 0.29);
+  }
+}
+
+// Unlock audio automatically on first touch/click anywhere
+document.addEventListener('pointerdown', () => {
+  initAudio();
+  if (musicOn && !bgmLoop) startBackgroundMusic();
+}, { once: true });
+
+/* ============================================================================
+   4. MY QB'S (SAVED QUESTION BANKS) & STARTER PROMPTS
+   ============================================================================ */
+const STARTER_PROMPTS = [
+  { q: "What year did humans first land on the Moon?", a: "1969" },
+  { q: "How many minutes are in a standard football match?", a: "90" },
+  { q: "What is the chemical symbol for Gold?", a: "Au" },
+  { q: "Which planet is known as the Red Planet?", a: "Mars" },
+  { q: "How many continents are there on Earth?", a: "7" },
+  { q: "What is the capital city of Japan?", a: "Tokyo" },
+  { q: "In what year did World War 2 end?", a: "1945" },
+  { q: "How many players are on a basketball team on court?", a: "5" }
+];
+
+let myQBs = JSON.parse(localStorage.getItem('double_sage_qbs') || '[]');
+let usedQBIndices = new Set();
+
+function saveQBsToStorage() {
+  localStorage.setItem('double_sage_qbs', JSON.stringify(myQBs));
+  document.getElementById('qb-count-badge').textContent = myQBs.length;
+  renderQBDrawerList();
+  populatePromptDropdowns();
+}
+
+function toggleQBModal() {
+  document.getElementById('qb-drawer').classList.toggle('hidden');
+  renderQBDrawerList();
+}
+
+function addNewQBFromDrawer() {
+  const q = document.getElementById('new-qb-q').value.trim();
+  const a = document.getElementById('new-qb-a').value.trim();
+  if (!q || !a) return alert('Please enter both a question and an answer.');
+  myQBs.push({ q, a });
+  document.getElementById('new-qb-q').value = '';
+  document.getElementById('new-qb-a').value = '';
+  saveQBsToStorage();
+  playSFX('lock');
+}
+
+function deleteQB(idx) {
+  myQBs.splice(idx, 1);
+  saveQBsToStorage();
+}
+
+function renderQBDrawerList() {
+  const container = document.getElementById('qb-list-container');
+  if (!myQBs.length) {
+    container.innerHTML = '<p class="sub">No saved QB's yet. Add your first question above!</p>';
+    return;
+  }
+  container.innerHTML = myQBs.map((item, idx) => `
+    <div class="qb-item">
+      <div class="qb-item-text">${escapeHTML(item.q)}<span>Ans: ${escapeHTML(item.a)}</span></div>
+      <button class="btn btn-danger btn-sm" onclick="deleteQB(${idx})">🗑️</button>
+    </div>
+  `).join('');
+}
+
+function populatePromptDropdowns() {
+  const qbSel = document.getElementById('qb-select');
+  qbSel.innerHTML = `<option value="">-- 📚 My QB's (${myQBs.length}) --</option>` +
+    myQBs.map((item, idx) => `<option value="${idx}">${escapeHTML(item.q.slice(0, 38))}</option>`).join('');
+
+  const stSel = document.getElementById('starter-select');
+  stSel.innerHTML = `<option value="">-- 💡 Starter Prompts --</option>` +
+    STARTER_PROMPTS.map((item, idx) => `<option value="${idx}">${escapeHTML(item.q.slice(0, 38))}</option>`).join('');
+}
+
+function loadFromQBSelect(idx) {
+  if (idx === '') return;
+  const item = myQBs[Number(idx)];
+  if (item) {
+    document.getElementById('question-input').value = item.q;
+    document.getElementById('answer-input').value = item.a;
+    usedQBIndices.add(Number(idx));
+    playSFX('tick');
+  }
+}
+
+function loadFromStarterSelect(idx) {
+  if (idx === '') return;
+  const item = STARTER_PROMPTS[Number(idx)];
+  if (item) {
+    document.getElementById('question-input').value = item.q;
+    document.getElementById('answer-input').value = item.a;
+    playSFX('tick');
+  }
+}
+
+function loadNextUnusedQB() {
+  if (!myQBs.length) return alert('Your QB bank is empty! Add questions in 📚 My QB's first.');
+  let idx = myQBs.findIndex((_, i) => !usedQBIndices.has(i));
+  if (idx === -1) { usedQBIndices.clear(); idx = 0; }
+  usedQBIndices.add(idx);
+  document.getElementById('question-input').value = myQBs[idx].q;
+  document.getElementById('answer-input').value = myQBs[idx].a;
+  playSFX('lock');
+}
+
+function saveCurrentToQB() {
+  const q = document.getElementById('question-input').value.trim();
+  const a = document.getElementById('answer-input').value.trim();
+  if (!q || !a) return alert('Type a question and answer first before saving.');
+  myQBs.push({ q, a });
+  saveQBsToStorage();
+  playSFX('lock');
+  alert('Saved to My QB's!');
+}
+
+/* ============================================================================
+   5. CORE GAMEPLAY, CONDITIONAL HINTS, TIMER & CONTEST APPROVAL
+   ============================================================================ */
+let players = [];
+let turns = [];
+let currentTurnIndex = 0;
+let timeLimit = 30;
+let isUmpireMode = false;
+let umpireName = 'The Umpire';
+
+let currentQuestion = '';
+let currentAnswer = '';
+let timerInterval = null;
+let turnStartTime = 0;
+let lastTurnResult = null;
+
+function renderPlayerInputs() {
+  const count = Math.min(10, Math.max(2, Number(document.getElementById('num-players').value) || 2));
+  const container = document.getElementById('player-names-container');
+  let html = '';
+  for (let i = 0; i < count; i++) {
+    html += `<label class="field-label">Player ${i + 1} Name</label>
+             <input type="text" class="player-name-input" value="Player ${i + 1}">`;
+  }
+  container.innerHTML = html;
+}
+
+function toggleUmpireInput() {
+  const checked = document.getElementById('umpire-mode').checked;
+  document.getElementById('umpire-name-wrap').classList.toggle('hidden', !checked);
+}
+
+function generateManagerHint(ans) {
+  const words = ans.trim().split(/\s+/).filter(Boolean);
+  const wordCount = words.length;
+  const letterMatches = ans.match(/[a-zA-Z]/g);
+  const letterCount = letterMatches ? letterMatches.length : 0;
+  const digitMatches = ans.match(/[0-9]/g);
+  const digitCount = digitMatches ? digitMatches.length : 0;
+
+  const parts = [];
+  parts.push(`${wordCount} ${wordCount === 1 ? 'word' : 'words'}`);
+  if (letterCount > 0) parts.push(`${letterCount} ${letterCount === 1 ? 'letter' : 'letters'}`);
+  // Conditional Digit Rule: ONLY show digits if numbers exist in the answer
+  if (digitCount > 0) parts.push(`${digitCount} ${digitCount === 1 ? 'digit' : 'digits'}`);
+  return parts.join(', ');
+}
+
+function showOnlyScreen(id) {
+  ['screen-setup', 'screen-pass-asker', 'screen-asker', 'screen-pass-guesser', 'screen-guesser', 'screen-result', 'screen-gameover']
+    .forEach(s => document.getElementById(s).classList.add('hidden'));
+  document.getElementById(id).classList.remove('hidden');
+}
+
+function startGame() {
+  initAudio();
+  if (musicOn && !bgmLoop) startBackgroundMusic();
+
+  const nameInputs = Array.from(document.querySelectorAll('.player-name-input'));
+  players = nameInputs.map((inp, i) => ({
+    id: i,
+    name: inp.value.trim() || `Player ${i + 1}`,
+    points: 0,
+    timeSpent: 0
+  }));
+
+  const qPerPlayer = Math.min(20, Math.max(1, Number(document.getElementById('q-per-player').value) || 3));
+  timeLimit = Number(document.getElementById('time-limit').value) || 30;
+  isUmpireMode = document.getElementById('umpire-mode').checked;
+  umpireName = document.getElementById('umpire-name').value.trim() || 'The Umpire';
+
+  turns = [];
+  for (let r = 0; r < qPerPlayer; r++) {
+    for (let gIdx = 0; gIdx < players.length; gIdx++) {
+      const askerIdx = isUmpireMode ? -1 : (gIdx + 1) % players.length;
+      turns.push({ round: r + 1, askerIdx, guesserIdx: gIdx });
+    }
   }
 
-  function triggerContest() {
-    if (state.isUmpire) return;
-    sfxContest();
-    const turn = state.turns[state.turnIndex];
-    const guesser = state.players[turn.guesserIdx];
-    const asker = state.players[turn.askerIdx];
+  currentTurnIndex = 0;
+  usedQBIndices.clear();
+  document.getElementById('scoreboard-card').classList.remove('hidden');
+  updateScoreboard();
+  prepareTurn();
+}
 
-    hideAllScreens();
-    document.getElementById('contestAskerTitle').textContent = `Pass Phone to ${asker.name} (Asker)`;
-    document.getElementById('contestSummary').innerHTML =
-      `<strong>${guesser.name}</strong> contested the result.<br/>` +
-      `Typed: <strong>${escapeHtml(state.pendingOutcome.typed)}</strong> vs Secret: <strong>${escapeHtml(state.currentA)}</strong>.<br/><br/>` +
-      `Decide fairly: accept their answer for +5 points, or void this question and send a new one.`;
-    document.getElementById('contestScreen').classList.remove('hidden');
-  }
+function prepareTurn() {
+  if (currentTurnIndex >= turns.length) return endGame();
+  const t = turns[currentTurnIndex];
+  const askerLabel = isUmpireMode ? `${umpireName} (Umpire)` : players[t.askerIdx].name;
+  const guesserLabel = players[t.guesserIdx].name;
 
-  function resolveContest(decision) {
-    const turn = state.turns[state.turnIndex];
-    const guesser = state.players[turn.guesserIdx];
+  document.getElementById('round-badge-1').textContent = `TURN ${currentTurnIndex + 1} OF ${turns.length}`;
+  document.getElementById('pass-asker-title').textContent = `Pass Phone to ${askerLabel}`;
+  document.getElementById('pass-asker-sub').textContent = `${guesserLabel} must look away while ${askerLabel} sets the question!`;
+  showOnlyScreen('screen-pass-asker');
+}
 
-    if (decision === 'accept') {
-      guesser.points += 5;
-      guesser.timeSpent += state.pendingOutcome.elapsed;
-      guesser.answeredCount += 1;
-      sfxWin();
-      state.turnIndex += 1;
-      updateScoreboardUI();
-      prepareTurn();
+function openAskerScreen() {
+  const t = turns[currentTurnIndex];
+  const askerLabel = isUmpireMode ? `${umpireName} (Umpire)` : players[t.askerIdx].name;
+  const guesserLabel = players[t.guesserIdx].name;
+
+  document.getElementById('asker-role-badge').textContent = isUmpireMode ? '🧑‍⚖️ UMPIRE SETTING QUESTION' : `🎯 ${askerLabel.toUpperCase()} SETTING TRAP`;
+  document.getElementById('asker-prompt-heading').textContent = `${askerLabel}, Enter Question & Secret Answer`;
+  document.getElementById('target-guesser-label').textContent = guesserLabel;
+  document.getElementById('question-input').value = '';
+  document.getElementById('answer-input').value = '';
+  document.getElementById('qb-select').value = '';
+  document.getElementById('starter-select').value = '';
+  showOnlyScreen('screen-asker');
+}
+
+function lockQuestion() {
+  const q = document.getElementById('question-input').value.trim();
+  const a = document.getElementById('answer-input').value.trim();
+  if (!q || !a) return alert('Please enter both a question and the secret answer.');
+  currentQuestion = q;
+  currentAnswer = a;
+  playSFX('lock');
+
+  const t = turns[currentTurnIndex];
+  document.getElementById('pass-guesser-title').textContent = `Pass Phone to ${players[t.guesserIdx].name}`;
+  showOnlyScreen('screen-pass-guesser');
+}
+
+function startGuesserTurn() {
+  const t = turns[currentTurnIndex];
+  const guesser = players[t.guesserIdx];
+  document.getElementById('guesser-badge').textContent = `🧠 ${guesser.name.toUpperCase()}'S TURN`;
+  document.getElementById('display-question').textContent = currentQuestion;
+  document.getElementById('display-hint').textContent = generateManagerHint(currentAnswer);
+  document.getElementById('guess-input').value = '';
+  showOnlyScreen('screen-guesser');
+  document.getElementById('guess-input').focus();
+
+  let remaining = timeLimit;
+  turnStartTime = performance.now();
+  const timerBox = document.getElementById('timer-box');
+  timerBox.classList.remove('urgent');
+  timerBox.textContent = remaining.toFixed(1) + 's';
+
+  let lastWholeSec = Math.ceil(remaining);
+  clearInterval(timerInterval);
+  timerInterval = setInterval(() => {
+    const elapsed = (performance.now() - turnStartTime) / 1000;
+    remaining = Math.max(0, timeLimit - elapsed);
+    timerBox.textContent = remaining.toFixed(1) + 's';
+
+    const wholeSec = Math.ceil(remaining);
+    if (wholeSec !== lastWholeSec && wholeSec <= 5 && wholeSec > 0) {
+      timerBox.classList.add('urgent');
+      playSFX('tick');
+    }
+    lastWholeSec = wholeSec;
+
+    if (remaining <= 0) {
+      clearInterval(timerInterval);
+      submitGuess(true);
+    }
+  }, 100);
+}
+
+function normalizeText(str) {
+  return str.toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+function submitGuess(timedOut = false) {
+  clearInterval(timerInterval);
+  const elapsed = Math.min(timeLimit, Number(((performance.now() - turnStartTime) / 1000).toFixed(2)));
+  const rawGuess = timedOut ? '(Time Expired)' : document.getElementById('guess-input').value.trim();
+
+  const isCorrect = !timedOut && rawGuess.length > 0 && normalizeText(rawGuess) === normalizeText(currentAnswer);
+  const t = turns[currentTurnIndex];
+
+  lastTurnResult = {
+    isCorrect,
+    rawGuess: rawGuess || '(Blank)',
+    elapsed,
+    askerIdx: t.askerIdx,
+    guesserIdx: t.guesserIdx
+  };
+
+  document.getElementById('res-q').textContent = currentQuestion;
+  document.getElementById('res-guess').textContent = lastTurnResult.rawGuess;
+  document.getElementById('res-ans').textContent = currentAnswer;
+
+  document.getElementById('contest-approval-box').classList.add('hidden');
+  document.getElementById('normal-next-box').classList.remove('hidden');
+
+  if (isCorrect) {
+    playSFX('win');
+    document.getElementById('result-headline').textContent = `✅ Correct! +5 Points to ${players[t.guesserIdx].name}`;
+    document.getElementById('result-details').textContent = `Answered in ${elapsed.toFixed(2)}s.`;
+    document.getElementById('contest-trigger-box').classList.add('hidden');
+  } else {
+    playSFX('wrong');
+    if (isUmpireMode) {
+      document.getElementById('result-headline').textContent = `❌ Wrong! (Umpire Ruling is Final)`;
+      document.getElementById('result-details').textContent = `0 points awarded. Time spent: ${elapsed.toFixed(2)}s.`;
+      document.getElementById('contest-trigger-box').classList.add('hidden');
     } else {
-      // Void round with 0 points & 0 time penalty, re-ask same turn
-      sfxLock();
-      showAskerScreen();
+      const askerName = players[t.askerIdx].name;
+      document.getElementById('result-headline').textContent = `❌ Wrong! +5 Points Pending for ${askerName}`;
+      document.getElementById('result-details').textContent = `Time spent: ${elapsed.toFixed(2)}s. If the secret answer was unfair or your guess was valid, contest below.`;
+      document.getElementById('contest-trigger-box').classList.remove('hidden');
     }
   }
+  showOnlyScreen('screen-result');
+}
 
-  function confirmRoundAndNext() {
-    const turn = state.turns[state.turnIndex];
-    const guesser = state.players[turn.guesserIdx];
-    const asker = state.isUmpire ? null : state.players[turn.askerIdx];
+function openContestApproval() {
+  playSFX('contest');
+  const t = turns[currentTurnIndex];
+  const askerName = players[t.askerIdx].name;
+  const guesserName = players[t.guesserIdx].name;
+  document.getElementById('contest-trigger-box').classList.add('hidden');
+  document.getElementById('normal-next-box').classList.add('hidden');
+  document.getElementById('contest-approval-box').classList.remove('hidden');
+  document.getElementById('contest-prompt-text').textContent =
+    `${guesserName} contested this result! Pass the phone to ${askerName} to decide:`;
+}
 
-    if (state.pendingOutcome.isCorrect) {
-      guesser.points += 5;
-    } else if (!state.isUmpire && asker) {
-      asker.points += 5;
-    }
-
-    guesser.timeSpent += state.pendingOutcome.elapsed;
-    guesser.answeredCount += 1;
-
-    state.turnIndex += 1;
-    updateScoreboardUI();
+function resolveContest(acceptGuesserPoint) {
+  const t = turns[currentTurnIndex];
+  if (acceptGuesserPoint) {
+    // Asker agrees guess was right -> award +5 points to Guesser
+    players[t.guesserIdx].points += 5;
+    players[t.guesserIdx].timeSpent += lastTurnResult.elapsed;
+    playSFX('win');
+    updateScoreboard();
+    currentTurnIndex++;
     prepareTurn();
+  } else {
+    // Asker rejects guess -> 0 points to either player & Asker must send a brand-new question
+    playSFX('lock');
+    alert(`Round voided with 0 points! ${players[t.askerIdx].name} must now enter a new question.`);
+    openAskerScreen();
   }
+}
 
-  function getSortedStandings() {
-    return [...state.players].sort((a, b) => {
-      if (b.points !== a.points) return b.points - a.points;
-      return a.timeSpent - b.timeSpent;
+function confirmRoundAndProceed() {
+  const r = lastTurnResult;
+  players[r.guesserIdx].timeSpent += r.elapsed;
+  if (r.isCorrect) {
+    players[r.guesserIdx].points += 5;
+  } else if (!isUmpireMode && r.askerIdx >= 0) {
+    players[r.askerIdx].points += 5;
+  }
+  updateScoreboard();
+  currentTurnIndex++;
+  prepareTurn();
+}
+
+function getRankedPlayers() {
+  return [...players].sort((a, b) => {
+    if (b.points !== a.points) return b.points - a.points;
+    return a.timeSpent - b.timeSpent; // Shortest time spent wins ties
+  });
+}
+
+function updateScoreboard() {
+  const ranked = getRankedPlayers();
+  document.getElementById('scoreboard-body').innerHTML = ranked.map((p, idx) => `
+    <tr>
+      <td>#${idx + 1}</td>
+      <td><strong>${escapeHTML(p.name)}</strong></td>
+      <td style="color:var(--gold-light); font-weight:800;">${p.points} pts</td>
+      <td style="color:var(--teal-light);">${p.timeSpent.toFixed(2)}s</td>
+    </tr>
+  `).join('');
+}
+
+function endGame() {
+  playSFX('win');
+  const ranked = getRankedPlayers();
+  const champ = ranked[0];
+  document.getElementById('winner-banner').textContent = `🏆 ${champ.name} Wins!`;
+  document.getElementById('winner-sub').textContent =
+    `Champion with ${champ.points} points in ${champ.timeSpent.toFixed(2)}s total answering time.`;
+
+  document.getElementById('final-scoreboard-body').innerHTML = ranked.map((p, idx) => `
+    <tr>
+      <td>${idx === 0 ? '🥇' : '#' + (idx + 1)}</td>
+      <td><strong>${escapeHTML(p.name)}</strong></td>
+      <td style="color:var(--gold-light); font-weight:800;">${p.points} pts</td>
+      <td style="color:var(--teal-light);">${p.timeSpent.toFixed(2)}s</td>
+    </tr>
+  `).join('');
+  document.getElementById('scoreboard-card').classList.add('hidden');
+  showOnlyScreen('screen-gameover');
+}
+
+function escapeHTML(str) {
+  return str.replace(/[&<>"']/g, m => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[m]));
+}
+
+/* ============================================================================
+   6. INITIALIZE ON PAGE LOAD
+   ============================================================================ */
+window.addEventListener('DOMContentLoaded', () => {
+  renderPlayerInputs();
+  saveQBsToStorage();
+
+  // Pre-resolve all 4 images & populate header + setup thumbnails
+  IMAGE_SLOTS.forEach((slot, i) => {
+    resolveImageCandidates(slot, (src) => {
+      if (slot.key === 'icon') document.getElementById('header-icon').src = src;
+      const thumb = document.getElementById('thumb-' + i);
+      if (thumb) thumb.src = src;
     });
-  }
+  });
 
-  function updateScoreboardUI() {
-    const sorted = getSortedStandings();
-    document.getElementById('liveScoresList').innerHTML = sorted.map((p, idx) => `
-      <div class="score-row">
-        <div>
-          <strong>#${idx + 1} ${escapeHtml(p.name)}</strong>
-          <div style="font-size:11px; color:var(--muted);">Answered: ${p.answeredCount} • Time: ${p.timeSpent.toFixed(2)}s</div>
-        </div>
-        <div style="font-size:18px; font-weight:900; color:var(--gold);">${p.points} pts</div>
-      </div>
-    `).join('');
-  }
-
-  function finishGame() {
-    sfxWin();
-    const sorted = getSortedStandings();
-    const champ = sorted[0];
-
-    hideAllScreens();
-    document.getElementById('scoreboardSection').classList.add('hidden');
-    document.getElementById('winnerHeadline').textContent = `🏆 ${champ.name} Wins!`;
-    document.getElementById('winnerSub').textContent = `${champ.points} Points in ${champ.timeSpent.toFixed(2)}s total answering time`;
-
-    document.getElementById('finalScoresList').innerHTML = sorted.map((p, idx) => `
-      <div class="score-row" style="${idx === 0 ? 'border-color:var(--gold);' : ''}">
-        <div>
-          <strong>${idx === 0 ? '👑' : '#' + (idx + 1)} ${escapeHtml(p.name)}</strong>
-          <div style="font-size:11px; color:var(--muted);">Total Time Spent: ${p.timeSpent.toFixed(2)}s</div>
-        </div>
-        <div style="font-size:18px; font-weight:900; color:var(--gold);">${p.points} pts</div>
-      </div>
-    `).join('');
-
-    document.getElementById('gameOverScreen').classList.remove('hidden');
-  }
-
-  function resetToSetup() {
-    hideAllScreens();
-    document.getElementById('scoreboardSection').classList.add('hidden');
-    document.getElementById('setupScreen').classList.remove('hidden');
-  }
+  // Launch 3-second-per-slide intro sequence
+  startIntroSequence();
+});
 </script>
 </body>
 </html>

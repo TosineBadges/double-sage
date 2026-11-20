@@ -2,377 +2,318 @@ import os
 import random
 import string
 import time
-from flask import Flask, request, jsonify, send_from_directory, abort
+from flask import Flask, request, jsonify, render_template_string, send_from_directory
 
 app = Flask(__name__)
-
-# In-memory rooms store
 rooms = {}
 
 STARTER_PROMPTS = [
     ("General", "What is the hardest natural substance on Earth?", "Diamond"),
-    ("General", "Which planet is known as the Red Planet?", "Mars"),
-    ("General", "What is the capital city of Japan?", "Tokyo"),
-    ("General", "How many continents are there on Earth?", "7"),
-    ("Numbers", "In what year did humans first land on the Moon?", "1969"),
-    ("Numbers", "How many minutes are in a standard soccer match?", "90"),
-    ("Numbers", "What is the boiling point of water in Celsius?", "100"),
-    ("Sports", "Which country won the 2022 FIFA World Cup?", "Argentina"),
-    ("Sports", "How many players are on a standard basketball team on court?", "5"),
-    ("Movies", "Who directed the movie Inception?", "Christopher Nolan"),
-    ("Movies", "What is the name of the fictional African nation in Black Panther?", "Wakanda"),
-    ("Science", "What chemical element has the symbol Au?", "Gold"),
-    ("Science", "How many bones are in the adult human body?", "206"),
+    ("General", "Which planet in our solar system has the most moons?", "Saturn"),
+    ("General", "What is the capital city of Australia?", "Canberra"),
+    ("General", "How many bones are in an adult human body?", "206"),
+    ("General", "Which ocean is the largest on Earth?", "Pacific Ocean"),
+    ("Numbers", "In what year did the Titanic sink?", "1912"),
+    ("Numbers", "How many minutes are in a full day?", "1440"),
+    ("Numbers", "What year did the first human walk on the Moon?", "1969"),
+    ("Numbers", "How many keys are on a standard full-size piano?", "88"),
+    ("Sports", "How many players are on a standard soccer team on the field?", "11"),
+    ("Sports", "Which country won the first FIFA World Cup in 1930?", "Uruguay"),
+    ("Sports", "How many points is a touchdown worth in American football?", "6"),
+    ("Movies", "Who directed the 1994 movie Pulp Fiction?", "Quentin Tarantino"),
+    ("Movies", "What is the name of the fictional African country in Black Panther?", "Wakanda"),
+    ("Science", "What is the chemical symbol for gold?", "Au"),
+    ("Science", "What gas do plants absorb from the atmosphere?", "Carbon dioxide"),
 ]
 
-def generate_room_code():
+def gen_code():
     while True:
-        code = ''.join(random.choices(string.ascii_uppercase + string.digits, k=4))
+        code = ''.join(random.choices(string.ascii_uppercase, k=4))
         if code not in rooms:
             return code
 
-def generate_hint(answer):
-    words = answer.strip().split()
-    word_count = len(words)
-    letter_count = sum(1 for ch in answer if ch.isalpha())
-    digit_count = sum(1 for ch in answer if ch.isdigit())
-
-    parts = [
-        f"{word_count} {'word' if word_count == 1 else 'words'}",
-        f"{letter_count} {'letter' if letter_count == 1 else 'letters'}"
-    ]
-    if digit_count > 0:
-        parts.append(f"{digit_count} {'digit' if digit_count == 1 else 'digits'}")
+def generate_hint(ans):
+    words = len(ans.split())
+    letters = sum(1 for c in ans if c.isalpha())
+    digits = sum(1 for c in ans if c.isdigit())
+    parts = [f"{words} {'word' if words == 1 else 'words'}", f"{letters} {'letter' if letters == 1 else 'letters'}"]
+    if digits > 0:
+        parts.append(f"{digits} {'digit' if digits == 1 else 'digits'}")
     return ", ".join(parts)
 
 def build_turn_queue(room):
-    players = room["players"]
-    q_per_player = room["questions_per_player"]
+    players = [p["name"] for p in room["players"]]
+    q_per_player = room["q_per_player"]
     queue = []
     if room["umpire_mode"]:
         for _ in range(q_per_player):
             for p in players:
-                queue.append({"asker": room["umpire_name"], "guesser": p["name"], "is_umpire": True})
+                queue.append({"asker": room["host"], "guesser": p})
     else:
         n = len(players)
-        for r in range(q_per_player):
+        for _ in range(q_per_player):
             for i in range(n):
-                guesser = players[i]["name"]
-                asker = players[(i + 1 + (r % max(1, n - 1))) % n]["name"]
-                queue.append({"asker": asker, "guesser": guesser, "is_umpire": False})
+                queue.append({"asker": players[i], "guesser": players[(i + 1) % n]})
     return queue
 
-def get_sorted_standings(room):
-    return sorted(
-        room["players"],
-        key=lambda p: (-p["score"], p["time_spent"])
-    )
-
-# Smart image route checking root and static/ with case-insensitive & multi-extension matching
-@app.route("/media/<path:base_name>")
-def serve_media(base_name):
+@app.route("/media/<path:filename>")
+def serve_media(filename):
+    base_name = os.path.splitext(filename)[0].lower()
     search_dirs = [os.getcwd(), os.path.join(os.getcwd(), "static")]
-    exts = ["", ".jpg", ".jpeg", ".png", ".webp", ".JPG", ".JPEG", ".PNG"]
-    candidates = []
-    stem, ext = os.path.splitext(base_name)
-    if ext:
-        candidates.extend([base_name, stem + ".jpg", stem + ".jpeg", stem + ".png", stem + ".JPG", stem + ".PNG"])
-    else:
-        for e in exts[1:]:
-            candidates.append(stem + e)
-            short = stem.replace("double_sage_", "")
-            if short != stem:
-                candidates.append(short + e)
-
-    for folder in search_dirs:
-        if not os.path.isdir(folder):
+    aliases = {
+        "double_sage_icon": ["double_sage_icon", "icon", "logo"],
+        "double_sage_battle": ["double_sage_battle", "battle"],
+        "double_sage_banner": ["double_sage_banner", "banner"],
+        "double_sage_tournament": ["double_sage_tournament", "tournament"],
+    }
+    targets = aliases.get(base_name, [base_name])
+    for d in search_dirs:
+        if not os.path.isdir(d):
             continue
-        files_in_dir = {f.lower(): f for f in os.listdir(folder)}
-        for cand in candidates:
-            actual = files_in_dir.get(cand.lower())
-            if actual:
-                return send_from_directory(folder, actual)
-    abort(404)
+        for f in os.listdir(d):
+            name_no_ext, ext = os.path.splitext(f)
+            if ext.lower() in [".jpg", ".jpeg", ".png", ".webp"] and name_no_ext.lower() in targets:
+                return send_from_directory(d, f)
+    return ("Not Found", 404)
 
 @app.route("/api/create", methods=["POST"])
-def api_create():
+def create_room():
     data = request.json or {}
-    host_name = (data.get("name") or "Host").strip() or "Host"
+    host = (data.get("name") or "Host").strip()
     max_players = max(2, min(10, int(data.get("max_players", 2))))
-    q_per_player = max(1, min(15, int(data.get("questions_per_player", 3))))
+    q_per_player = max(1, min(10, int(data.get("q_per_player", 3))))
     time_limit = max(10, min(60, int(data.get("time_limit", 30))))
     umpire_mode = bool(data.get("umpire_mode", False))
 
-    code = generate_room_code()
-    players = [] if umpire_mode else [{"name": host_name, "score": 0, "time_spent": 0.0}]
-
+    code = gen_code()
+    players = [] if umpire_mode else [{"name": host, "score": 0, "time_spent": 0.0}]
     rooms[code] = {
         "code": code,
-        "host": host_name,
-        "umpire_mode": umpire_mode,
-        "umpire_name": host_name if umpire_mode else None,
+        "host": host,
         "max_players": max_players,
-        "questions_per_player": q_per_player,
+        "q_per_player": q_per_player,
         "time_limit": time_limit,
+        "umpire_mode": umpire_mode,
         "players": players,
-        "status": "lobby",
+        "state": "lobby",
         "queue": [],
-        "turn_index": 0,
-        "phase": "asking",
-        "current_question": "",
-        "current_answer": "",
-        "current_hint": "",
-        "turn_start_time": 0.0,
-        "last_result": None,
+        "turn_idx": 0,
+        "current": None,
+        "result": None,
         "contest": None,
     }
-    return jsonify({"ok": True, "code": code, "name": host_name})
+    return jsonify({"ok": True, "code": code, "room": rooms[code]})
 
 @app.route("/api/join", methods=["POST"])
-def api_join():
+def join_room():
     data = request.json or {}
     code = (data.get("code") or "").strip().upper()
     name = (data.get("name") or "").strip()
-    if not code or not name:
-        return jsonify({"ok": False, "error": "Enter both your name and room code."})
-    room = rooms.get(code)
-    if not room:
-        return jsonify({"ok": False, "error": "Room not found. Check the 4-letter code."})
-    if room["status"] != "lobby":
-        if any(p["name"].lower() == name.lower() for p in room["players"]) or (
-            room["umpire_mode"] and room["umpire_name"].lower() == name.lower()
-        ):
-            return jsonify({"ok": True, "code": code, "name": name})
-        return jsonify({"ok": False, "error": "Match already in progress."})
-
-    if room["umpire_mode"] and room["umpire_name"].lower() == name.lower():
-        return jsonify({"ok": True, "code": code, "name": room["umpire_name"]})
-
-    for p in room["players"]:
-        if p["name"].lower() == name.lower():
-            return jsonify({"ok": True, "code": code, "name": p["name"]})
-
+    if code not in rooms:
+        return jsonify({"ok": False, "error": "Room not found."})
+    room = rooms[code]
+    if room["umpire_mode"] and name == room["host"]:
+        return jsonify({"ok": True, "room": room})
+    existing = [p for p in room["players"] if p["name"].lower() == name.lower()]
+    if existing:
+        return jsonify({"ok": True, "room": room})
+    if room["state"] != "lobby":
+        return jsonify({"ok": False, "error": "Game already started."})
     if len(room["players"]) >= room["max_players"]:
         return jsonify({"ok": False, "error": "Room is full."})
-
     room["players"].append({"name": name, "score": 0, "time_spent": 0.0})
-    return jsonify({"ok": True, "code": code, "name": name})
+    return jsonify({"ok": True, "room": room})
 
 @app.route("/api/kick", methods=["POST"])
-def api_kick():
+def kick_player():
     data = request.json or {}
-    code = (data.get("code") or "").strip().upper()
-    requester = (data.get("requester") or "").strip()
-    target = (data.get("target") or "").strip()
+    code = (data.get("code") or "").upper()
+    host = data.get("host")
+    target = data.get("target")
     room = rooms.get(code)
-    if not room or room["host"] != requester or room["status"] != "lobby":
-        return jsonify({"ok": False, "error": "Not authorized."})
-    room["players"] = [p for p in room["players"] if p["name"] != target]
-    return jsonify({"ok": True})
+    if room and room["host"] == host and room["state"] == "lobby":
+        room["players"] = [p for p in room["players"] if p["name"] != target]
+    return jsonify({"ok": True, "room": room})
 
 @app.route("/api/start", methods=["POST"])
-def api_start():
+def start_game():
     data = request.json or {}
-    code = (data.get("code") or "").strip().upper()
-    requester = (data.get("requester") or "").strip()
+    code = (data.get("code") or "").upper()
+    host = data.get("host")
     room = rooms.get(code)
-    if not room or room["host"] != requester:
-        return jsonify({"ok": False, "error": "Only host can start."})
-    min_needed = 2
-    if len(room["players"]) < min_needed:
-        return jsonify({"ok": False, "error": "Need at least 2 competing players to start."})
+    if not room or room["host"] != host:
+        return jsonify({"ok": False, "error": "Unauthorized."})
+    if len(room["players"]) < 2:
+        return jsonify({"ok": False, "error": "Need at least 2 players to start."})
     room["queue"] = build_turn_queue(room)
-    room["turn_index"] = 0
-    room["status"] = "playing"
-    room["phase"] = "asking"
-    room["last_result"] = None
+    room["turn_idx"] = 0
+    room["state"] = "asking"
+    room["current"] = None
+    room["result"] = None
     room["contest"] = None
-    return jsonify({"ok": True})
+    return jsonify({"ok": True, "room": room})
 
-@app.route("/api/set_question", methods=["POST"])
-def api_set_question():
+@app.route("/api/ask", methods=["POST"])
+def submit_question():
     data = request.json or {}
-    code = (data.get("code") or "").strip().upper()
-    asker = (data.get("name") or "").strip()
+    code = (data.get("code") or "").upper()
+    asker = data.get("asker")
     question = (data.get("question") or "").strip()
     answer = (data.get("answer") or "").strip()
     room = rooms.get(code)
-    if not room or room["status"] != "playing" or room["phase"] != "asking":
-        return jsonify({"ok": False, "error": "Invalid game state."})
-    turn = room["queue"][room["turn_index"]]
-    if turn["asker"] != asker:
-        return jsonify({"ok": False, "error": "Not your turn to ask."})
-    if not question or not answer:
-        return jsonify({"ok": False, "error": "Enter both a question and secret answer."})
-
-    room["current_question"] = question
-    room["current_answer"] = answer
-    room["current_hint"] = generate_hint(answer)
-    room["turn_start_time"] = time.time()
-    room["phase"] = "guessing"
+    if not room or room["state"] != "asking":
+        return jsonify({"ok": False, "error": "Invalid state."})
+    turn = room["queue"][room["turn_idx"]]
+    if turn["asker"] != asker or not question or not answer:
+        return jsonify({"ok": False, "error": "Invalid input or turn."})
+    room["current"] = {
+        "asker": asker,
+        "guesser": turn["guesser"],
+        "question": question,
+        "answer": answer,
+        "hint": generate_hint(answer),
+        "start_ts": time.time(),
+    }
+    room["state"] = "guessing"
+    room["result"] = None
     room["contest"] = None
-    return jsonify({"ok": True})
+    return jsonify({"ok": True, "room": room})
 
-@app.route("/api/submit_guess", methods=["POST"])
-def api_submit_guess():
+@app.route("/api/guess", methods=["POST"])
+def submit_guess():
     data = request.json or {}
-    code = (data.get("code") or "").strip().upper()
-    guesser = (data.get("name") or "").strip()
+    code = (data.get("code") or "").upper()
+    guesser = data.get("guesser")
     guess = (data.get("guess") or "").strip()
     timed_out = bool(data.get("timed_out", False))
     room = rooms.get(code)
-    if not room or room["status"] != "playing" or room["phase"] != "guessing":
-        return jsonify({"ok": False, "error": "Invalid state."})
-    turn = room["queue"][room["turn_index"]]
-    if turn["guesser"] != guesser:
-        return jsonify({"ok": False, "error": "Not your turn to guess."})
-
-    elapsed = round(min(float(room["time_limit"]), max(0.1, time.time() - room["turn_start_time"])), 2)
+    if not room or room["state"] != "guessing":
+        return jsonify({"ok": True, "room": room})
+    cur = room["current"]
+    if cur["guesser"] != guesser:
+        return jsonify({"ok": False, "error": "Not your turn."})
+    elapsed = min(float(room["time_limit"]), round(time.time() - cur["start_ts"], 2))
     if timed_out:
         elapsed = float(room["time_limit"])
-
-    correct = (not timed_out) and (guess.lower() == room["current_answer"].lower())
-
+    correct = (not timed_out) and (guess.lower() == cur["answer"].lower())
     for p in room["players"]:
         if p["name"] == guesser:
             p["time_spent"] = round(p["time_spent"] + elapsed, 2)
             if correct:
                 p["score"] += 5
-        elif not turn["is_umpire"] and p["name"] == turn["asker"] and not correct:
+        if not correct and not room["umpire_mode"] and p["name"] == cur["asker"]:
             p["score"] += 5
-
-    room["last_result"] = {
-        "asker": turn["asker"],
-        "guesser": guesser,
-        "is_umpire": turn["is_umpire"],
-        "question": room["current_question"],
-        "guess": "(Time Expired)" if timed_out else (guess or "(Blank)"),
-        "answer": room["current_answer"],
+    room["result"] = {
         "correct": correct,
+        "guess": "(Time Expired)" if timed_out else (guess or "(Blank)"),
+        "answer": cur["answer"],
+        "question": cur["question"],
+        "asker": cur["asker"],
+        "guesser": guesser,
         "elapsed": elapsed,
         "contested": False,
-        "contest_resolved": False,
-        "resolution_note": ""
     }
-    room["phase"] = "result"
-    return jsonify({"ok": True})
+    room["state"] = "result"
+    return jsonify({"ok": True, "room": room})
 
 @app.route("/api/contest", methods=["POST"])
-def api_contest():
+def raise_contest():
     data = request.json or {}
-    code = (data.get("code") or "").strip().upper()
-    guesser = (data.get("name") or "").strip()
-    reason = (data.get("reason") or "Answer should be accepted").strip()
+    code = (data.get("code") or "").upper()
+    guesser = data.get("guesser")
+    reason = (data.get("reason") or "My answer was right!").strip()
     room = rooms.get(code)
-    if not room or room["phase"] != "result" or not room["last_result"]:
-        return jsonify({"ok": False, "error": "Cannot contest right now."})
-    res = room["last_result"]
-    if res["is_umpire"]:
-        return jsonify({"ok": False, "error": "Umpire rulings are final."})
+    if not room or room["state"] != "result" or room["umpire_mode"]:
+        return jsonify({"ok": False, "error": "Cannot contest."})
+    res = room["result"]
     if res["guesser"] != guesser or res["correct"] or res["contested"]:
-        return jsonify({"ok": False, "error": "Contest not available."})
-
+        return jsonify({"ok": False, "error": "Invalid contest."})
     res["contested"] = True
     room["contest"] = {"guesser": guesser, "asker": res["asker"], "reason": reason}
-    room["phase"] = "contest_review"
-    return jsonify({"ok": True})
+    room["state"] = "contest"
+    return jsonify({"ok": True, "room": room})
 
 @app.route("/api/resolve_contest", methods=["POST"])
-def api_resolve_contest():
+def resolve_contest():
     data = request.json or {}
-    code = (data.get("code") or "").strip().upper()
-    asker = (data.get("name") or "").strip()
-    decision = data.get("decision")  # "accept_guess" or "new_question"
+    code = (data.get("code") or "").upper()
+    asker = data.get("asker")
+    decision = data.get("decision") # "accept_guess" or "reask"
     room = rooms.get(code)
-    if not room or room["phase"] != "contest_review" or not room["last_result"]:
+    if not room or room["state"] != "contest":
         return jsonify({"ok": False, "error": "No active contest."})
-    res = room["last_result"]
+    res = room["result"]
     if res["asker"] != asker:
         return jsonify({"ok": False, "error": "Only the Asker can decide."})
-
+    # Reverse the +5 originally given to Asker
+    for p in room["players"]:
+        if p["name"] == asker:
+            p["score"] = max(0, p["score"] - 5)
     if decision == "accept_guess":
         for p in room["players"]:
-            if p["name"] == res["asker"]:
-                p["score"] = max(0, p["score"] - 5)
-            elif p["name"] == res["guesser"]:
+            if p["name"] == res["guesser"]:
                 p["score"] += 5
         res["correct"] = True
-        res["contest_resolved"] = True
-        res["resolution_note"] = f"{asker} accepted the guess! +5 pts awarded to {res['guesser']}."
         room["contest"] = None
-        room["phase"] = "result"
-    elif decision == "new_question":
-        for p in room["players"]:
-            if p["name"] == res["asker"]:
-                p["score"] = max(0, p["score"] - 5)
-            elif p["name"] == res["guesser"]:
-                p["time_spent"] = round(max(0.0, p["time_spent"] - res["elapsed"]), 2)
-        room["contest"] = None
-        room["last_result"] = None
-        room["phase"] = "asking"
-    return jsonify({"ok": True})
-
-@app.route("/api/next_turn", methods=["POST"])
-def api_next_turn():
-    data = request.json or {}
-    code = (data.get("code") or "").strip().upper()
-    room = rooms.get(code)
-    if not room or room["phase"] != "result":
-        return jsonify({"ok": False, "error": "Not ready for next turn."})
-    room["turn_index"] += 1
-    room["last_result"] = None
-    room["contest"] = None
-    if room["turn_index"] >= len(room["queue"]):
-        room["status"] = "gameover"
-        room["phase"] = "gameover"
+        room["state"] = "result"
     else:
-        room["phase"] = "asking"
-    return jsonify({"ok": True})
+        # Void round and re-ask fresh question
+        for p in room["players"]:
+            if p["name"] == res["guesser"]:
+                p["time_spent"] = max(0.0, round(p["time_spent"] - res["elapsed"], 2))
+        room["current"] = None
+        room["result"] = None
+        room["contest"] = None
+        room["state"] = "asking"
+    return jsonify({"ok": True, "room": room})
+
+@app.route("/api/next", methods=["POST"])
+def next_turn():
+    data = request.json or {}
+    code = (data.get("code") or "").upper()
+    room = rooms.get(code)
+    if not room or room["state"] != "result":
+        return jsonify({"ok": True, "room": room})
+    room["turn_idx"] += 1
+    if room["turn_idx"] >= len(room["queue"]):
+        room["state"] = "gameover"
+    else:
+        room["state"] = "asking"
+        room["current"] = None
+        room["result"] = None
+        room["contest"] = None
+    return jsonify({"ok": True, "room": room})
 
 @app.route("/api/state")
-def api_state():
-    code = (request.args.get("code") or "").strip().upper()
-    name = (request.args.get("name") or "").strip()
+def get_state():
+    code = (request.args.get("code") or "").upper()
     room = rooms.get(code)
     if not room:
-        return jsonify({"ok": False, "error": "Room closed or not found."})
-
-    if room["status"] == "lobby":
-        in_room = (room["umpire_mode"] and room["umpire_name"] == name) or any(
-            p["name"] == name for p in room["players"]
-        )
-        if not in_room:
-            return jsonify({"ok": False, "kicked": True, "error": "You were removed from the lobby."})
-
-    turn = None
-    remaining = room["time_limit"]
-    if room["status"] == "playing" and room["turn_index"] < len(room["queue"]):
-        turn = room["queue"][room["turn_index"]]
-        if room["phase"] == "guessing":
-            remaining = max(0, round(room["time_limit"] - (time.time() - room["turn_start_time"]), 1))
-
-    return jsonify({
-        "ok": True,
-        "code": room["code"],
-        "host": room["host"],
-        "umpire_mode": room["umpire_mode"],
-        "umpire_name": room["umpire_name"],
-        "max_players": room["max_players"],
-        "questions_per_player": room["questions_per_player"],
-        "time_limit": room["time_limit"],
-        "players": room["players"],
-        "standings": get_sorted_standings(room),
-        "status": room["status"],
-        "phase": room["phase"],
-        "turn": turn,
-        "turn_number": room["turn_index"] + 1,
-        "total_turns": len(room["queue"]),
-        "current_question": room["current_question"] if room["phase"] in ("guessing", "result", "contest_review") else "",
-        "current_hint": room["current_hint"] if room["phase"] in ("guessing", "result", "contest_review") else "",
-        "remaining": remaining,
-        "last_result": room["last_result"],
-        "contest": room["contest"],
-    })
+        return jsonify({"ok": False, "error": "Room closed."})
+    if room["state"] == "guessing" and room["current"]:
+        elapsed = time.time() - room["current"]["start_ts"]
+        if elapsed >= room["time_limit"]:
+            # Auto-timeout
+            cur = room["current"]
+            guesser = cur["guesser"]
+            tl = float(room["time_limit"])
+            for p in room["players"]:
+                if p["name"] == guesser:
+                    p["time_spent"] = round(p["time_spent"] + tl, 2)
+                if not room["umpire_mode"] and p["name"] == cur["asker"]:
+                    p["score"] += 5
+            room["result"] = {
+                "correct": False,
+                "guess": "(Time Expired)",
+                "answer": cur["answer"],
+                "question": cur["question"],
+                "asker": cur["asker"],
+                "guesser": guesser,
+                "elapsed": tl,
+                "contested": False,
+            }
+            room["state"] = "result"
+    return jsonify({"ok": True, "room": room})
 
 HTML_PAGE = """<!DOCTYPE html>
 <html lang="en">
@@ -381,806 +322,613 @@ HTML_PAGE = """<!DOCTYPE html>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Double Sage — Online Multiplayer</title>
 <style>
-  :root {
-    --bg: #0b1120;
-    --card: #131c31;
-    --card2: #1a2642;
-    --gold: #f5b942;
-    --teal: #2dd4bf;
-    --text: #f1f5f9;
-    --muted: #94a3b8;
-    --danger: #f43f5e;
-    --success: #10b981;
-  }
-  * { box-sizing: border-box; font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; }
-  body { margin: 0; background: var(--bg); color: var(--text); min-height: 100vh; }
-  .topbar {
-    display: flex; align-items: center; justify-content: space-between;
-    padding: 12px 18px; background: rgba(19, 28, 49, 0.95);
-    border-bottom: 1px solid rgba(245, 185, 66, 0.25); position: sticky; top: 0; z-index: 20;
-  }
-  .brand { display: flex; align-items: center; gap: 10px; font-weight: 800; font-size: 1.2rem; color: var(--gold); letter-spacing: 0.5px; }
-  .brand img { width: 38px; height: 38px; border-radius: 10px; object-fit: cover; border: 1.5px solid var(--gold); }
-  .sfx-btn {
-    background: var(--card2); color: var(--teal); border: 1px solid rgba(45, 212, 191, 0.4);
-    padding: 6px 12px; border-radius: 20px; font-size: 0.82rem; font-weight: 700; cursor: pointer;
-  }
-  .container { max-width: 680px; margin: 0 auto; padding: 18px 14px 50px; }
-  .hero-box { margin-bottom: 18px; }
-  .hero-banner {
-    width: 100%; border-radius: 14px; overflow: hidden; border: 1px solid rgba(245,185,66,0.3);
-    box-shadow: 0 10px 25px rgba(0,0,0,0.45); margin-bottom: 10px; background: var(--card);
-  }
-  .hero-banner img { width: 100%; max-height: 220px; object-fit: cover; display: block; }
-  .hero-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-  .hero-thumb {
-    border-radius: 12px; overflow: hidden; border: 1px solid rgba(45,212,191,0.28);
-    background: var(--card); position: relative;
-  }
-  .hero-thumb img { width: 100%; height: 125px; object-fit: cover; display: block; }
-  .hero-cap {
-    position: absolute; bottom: 0; left: 0; right: 0; padding: 5px 8px;
-    background: linear-gradient(transparent, rgba(11,17,32,0.92));
-    font-size: 0.74rem; font-weight: 700; color: var(--gold); text-align: center;
-  }
-  .card {
-    background: var(--card); border: 1px solid rgba(255,255,255,0.08);
-    border-radius: 16px; padding: 18px; margin-bottom: 16px;
-    box-shadow: 0 8px 24px rgba(0,0,0,0.3);
-  }
-  h2, h3 { margin-top: 0; color: var(--gold); }
-  label { display: block; font-size: 0.85rem; color: var(--muted); margin: 10px 0 5px; font-weight: 600; }
-  input, select, textarea {
-    width: 100%; padding: 11px 12px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.14);
-    background: var(--card2); color: var(--text); font-size: 0.98rem;
-  }
-  input:focus, select:focus, textarea:focus { outline: none; border-color: var(--gold); }
-  .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-  .btn {
-    width: 100%; padding: 12px; border: none; border-radius: 11px; font-size: 0.98rem;
-    font-weight: 800; cursor: pointer; margin-top: 12px; transition: transform 0.08s;
-  }
-  .btn:active { transform: scale(0.98); }
-  .btn-gold { background: linear-gradient(135deg, #f5b942, #d97706); color: #0b1120; }
-  .btn-teal { background: linear-gradient(135deg, #2dd4bf, #0d9488); color: #0b1120; }
-  .btn-dark { background: var(--card2); color: var(--text); border: 1px solid rgba(255,255,255,0.15); }
-  .btn-danger { background: var(--danger); color: #fff; }
-  .btn-sm { padding: 7px 11px; font-size: 0.82rem; width: auto; margin-top: 0; }
-  .pill {
-    display: inline-block; padding: 4px 10px; border-radius: 999px; font-size: 0.78rem;
-    font-weight: 700; background: rgba(245,185,66,0.16); color: var(--gold);
-  }
-  .room-code-box {
-    text-align: center; padding: 14px; background: var(--card2); border-radius: 14px;
-    border: 1.5px dashed var(--gold); margin-bottom: 12px;
-  }
-  .room-code { font-size: 2.2rem; font-weight: 900; letter-spacing: 6px; color: var(--gold); }
-  .player-item {
-    display: flex; align-items: center; justify-content: space-between;
-    padding: 10px 12px; background: var(--card2); border-radius: 10px; margin-bottom: 8px;
-  }
-  .hint-box {
-    background: rgba(45, 212, 191, 0.12); border: 1px solid var(--teal);
-    color: var(--teal); padding: 12px; border-radius: 12px; font-weight: 800;
-    text-align: center; margin: 12px 0; font-size: 1.05rem;
-  }
-  .timer-bar {
-    font-size: 1.4rem; font-weight: 900; text-align: center; padding: 8px;
-    border-radius: 10px; background: var(--card2); color: var(--gold); margin-bottom: 10px;
-  }
-  .timer-urgent { color: var(--danger); border: 1px solid var(--danger); }
-  .hidden { display: none !important; }
-  .qb-item {
-    background: var(--card2); padding: 10px; border-radius: 10px; margin-bottom: 8px;
-    display: flex; justify-content: space-between; align-items: center; gap: 8px;
-  }
-  .chk-row { display: flex; align-items: center; gap: 10px; margin-top: 12px; cursor: pointer; }
-  .chk-row input { width: 18px; height: 18px; margin: 0; }
-  table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-  th, td { padding: 9px 8px; text-align: left; border-bottom: 1px solid rgba(255,255,255,0.08); font-size: 0.9rem; }
-  th { color: var(--muted); font-size: 0.8rem; }
+  :root { --bg:#090d1a; --card:#12192e; --gold:#f5b73b; --teal:#22d3ee; --text:#f1f5f9; --muted:#94a3b8; --danger:#f43f5e; --ok:#10b981; }
+  * { box-sizing:border-box; font-family:system-ui,-apple-system,sans-serif; }
+  body { margin:0; background:var(--bg); color:var(--text); }
+  .topbar { position:sticky; top:0; z-index:20; background:#0d1426; border-bottom:1px solid #1e293b; padding:10px 14px; display:flex; flex-wrap:wrap; gap:8px; align-items:center; justify-content:space-between; }
+  .brand { display:flex; align-items:center; gap:8px; font-weight:800; color:var(--gold); font-size:1.1rem; }
+  .brand img { width:32px; height:32px; border-radius:8px; object-fit:cover; }
+  .audio-bar { display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
+  .pill { background:#1e293b; color:var(--text); border:1px solid #334155; border-radius:999px; padding:5px 10px; font-size:0.78rem; cursor:pointer; font-weight:600; }
+  .pill.active { border-color:var(--teal); color:var(--teal); }
+  input[type=range] { width:75px; accent-color:var(--gold); }
+  .wrap { max-width:560px; margin:16px auto; padding:0 14px 40px; }
+  .card { background:var(--card); border:1px solid #1e293b; border-radius:16px; padding:18px; margin-bottom:14px; box-shadow:0 10px 25px rgba(0,0,0,0.35); }
+  h2, h3 { margin:0 0 10px; }
+  label { display:block; font-size:0.82rem; color:var(--muted); margin:10px 0 4px; }
+  input[type=text], input[type=number], select, textarea { width:100%; padding:11px; border-radius:10px; border:1px solid #334155; background:#0b1120; color:var(--text); font-size:0.95rem; }
+  .btn { width:100%; padding:12px; border:none; border-radius:12px; font-weight:700; font-size:0.95rem; cursor:pointer; margin-top:10px; }
+  .btn-gold { background:linear-gradient(135deg,#f5b73b,#d97706); color:#090d1a; }
+  .btn-teal { background:linear-gradient(135deg,#22d3ee,#0284c7); color:#090d1a; }
+  .btn-danger { background:var(--danger); color:#fff; }
+  .btn-ok { background:var(--ok); color:#090d1a; }
+  .btn-ghost { background:#1e293b; color:var(--text); }
+  .row { display:flex; gap:8px; }
+  .row > * { flex:1; }
+  .code-box { font-size:2rem; font-weight:900; letter-spacing:6px; text-align:center; color:var(--gold); background:#090d1a; padding:12px; border-radius:12px; border:1px dashed var(--gold); margin:8px 0; }
+  .hint-box { background:#0b1120; border-left:4px solid var(--teal); padding:10px 12px; border-radius:8px; color:var(--teal); font-weight:700; margin:10px 0; }
+  .timer { font-size:1.8rem; font-weight:900; text-align:center; color:var(--gold); margin:6px 0; }
+  .timer.urgent { color:var(--danger); animation:pulse 0.6s infinite; }
+  @keyframes pulse { 50% { opacity:0.4; } }
+  table { width:100%; border-collapse:collapse; margin-top:8px; font-size:0.9rem; }
+  th, td { padding:8px; text-align:left; border-bottom:1px solid #1e293b; }
+  th { color:var(--muted); font-size:0.78rem; }
+  .hidden { display:none !important; }
+  /* 4-Slide Intro Splash */
+  #splash { position:fixed; inset:0; z-index:999; background:#050811; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:20px; text-align:center; }
+  #splash img { max-width:92vw; max-height:62vh; border-radius:18px; border:2px solid var(--gold); box-shadow:0 0 35px rgba(245,183,59,0.3); object-fit:contain; }
+  .dots { display:flex; gap:8px; margin:14px 0 8px; }
+  .dot { width:10px; height:10px; border-radius:50%; background:#334155; }
+  .dot.on { background:var(--gold); transform:scale(1.25); }
+  .prog { width:240px; height:5px; background:#1e293b; border-radius:99px; overflow:hidden; margin-bottom:14px; }
+  .prog-fill { height:100%; width:0%; background:linear-gradient(90deg,var(--gold),var(--teal)); transition:width 0.1s linear; }
+  .qb-item { display:flex; justify-content:space-between; align-items:center; background:#0b1120; padding:8px 10px; border-radius:8px; margin-top:6px; font-size:0.85rem; }
 </style>
 </head>
 <body>
 
+<div id="splash">
+  <img id="splashImg" src="/media/double_sage_icon.jpg" alt="Double Sage">
+  <div id="splashLabel" style="color:var(--gold);font-weight:800;margin-top:10px;letter-spacing:1px;">DOUBLE SAGE</div>
+  <div class="dots">
+    <div class="dot on" id="d0"></div><div class="dot" id="d1"></div><div class="dot" id="d2"></div><div class="dot" id="d3"></div>
+  </div>
+  <div class="prog"><div class="prog-fill" id="progFill"></div></div>
+  <div class="row" style="width:280px;">
+    <button class="btn btn-gold" onclick="enableSoundAndSkip(false)" style="margin:0;">🔊 Sound On</button>
+    <button class="btn btn-ghost" onclick="closeSplash()" style="margin:0;">Skip Intro</button>
+  </div>
+</div>
+
 <div class="topbar">
   <div class="brand">
-    <img id="navIcon" src="/media/double_sage_icon" alt="Icon" onerror="this.style.display='none'">
+    <img src="/media/double_sage_icon.jpg" onerror="this.style.display='none'">
     <span>DOUBLE SAGE</span>
   </div>
-  <div style="display:flex; gap:8px; align-items:center;">
-    <button class="sfx-btn" onclick="openQbModal()">📚 My QB's</button>
-    <button id="sfxBtn" class="sfx-btn" onclick="toggleSfx()">🔊 SFX ON</button>
+  <div class="audio-bar">
+    <button class="pill" onclick="startSplash()">🎬 Intro</button>
+    <button class="pill active" id="musicBtn" onclick="toggleMusic()">🎵 Music: ON</button>
+    <button class="pill active" id="sfxBtn" onclick="toggleSfx()">🔊 SFX: ON</button>
+    <input type="range" id="volSlider" min="0" max="100" value="85" oninput="setVol(this.value)" title="Volume">
   </div>
 </div>
 
-<div class="container">
-  <!-- HOME / LANDING VIEW -->
-  <div id="viewHome">
-    <div class="hero-box" id="heroShowcase">
-      <div class="hero-banner" id="bannerWrap">
-        <img src="/media/double_sage_banner" alt="Double Sage Banner" onerror="document.getElementById('bannerWrap').style.display='none'">
-      </div>
-      <div class="hero-grid" id="galleryWrap">
-        <div class="hero-thumb" id="battleWrap">
-          <img src="/media/double_sage_battle" alt="1v1 Battle" onerror="document.getElementById('battleWrap').style.display='none'">
-          <div class="hero-cap">⚔️ 1v1 MIND DUEL</div>
-        </div>
-        <div class="hero-thumb" id="tourneyWrap">
-          <img src="/media/double_sage_tournament" alt="Tournament & Team Clash" onerror="document.getElementById('tourneyWrap').style.display='none'">
-          <div class="hero-cap">🏆 TOURNAMENT & CLASH</div>
-        </div>
-      </div>
-    </div>
-
+<div class="wrap">
+  <!-- HOME VIEW -->
+  <div id="homeView">
     <div class="card">
-      <h2>Join an Online Room</h2>
-      <label>Your Player Name</label>
-      <input id="joinName" placeholder="Enter your name">
-      <label>4-Letter Room Code</label>
-      <input id="joinCode" placeholder="e.g. A7K2" maxlength="4" style="text-transform:uppercase; font-weight:800; letter-spacing:3px;">
-      <button class="btn btn-teal" onclick="joinRoom()">Join Room</button>
-    </div>
+      <div class="row" style="margin-bottom:10px;">
+        <button class="btn btn-gold" onclick="showTab('createTab')" style="margin:0;">Create Room</button>
+        <button class="btn btn-teal" onclick="showTab('joinTab')" style="margin:0;">Join Room</button>
+        <button class="btn btn-ghost" onclick="toggleQBModal()" style="margin:0;">📚 My QB's</button>
+      </div>
 
-    <div class="card">
-      <h2>Create a New Room</h2>
-      <label>Your Name (Host / Umpire)</label>
-      <input id="hostName" placeholder="Enter your name">
-      <div class="row2">
-        <div>
-          <label>Competing Players (2–10)</label>
-          <select id="maxPlayers">
-            <option value="2" selected>2 Players</option>
-            <option value="3">3 Players</option>
-            <option value="4">4 Players</option>
-            <option value="5">5 Players</option>
-            <option value="6">6 Players</option>
-            <option value="8">8 Players</option>
-            <option value="10">10 Players</option>
-          </select>
+      <div id="createTab">
+        <h3>Host a New Match</h3>
+        <label>Your Name</label>
+        <input type="text" id="hostName" placeholder="Enter your name">
+        <div class="row">
+          <div>
+            <label>Players (2-10)</label>
+            <input type="number" id="maxPlayers" min="2" max="10" value="2">
+          </div>
+          <div>
+            <label>Questions / Player</label>
+            <input type="number" id="qPerPlayer" min="1" max="10" value="3">
+          </div>
         </div>
-        <div>
-          <label>Questions Per Player</label>
-          <select id="qPerPlayer">
-            <option value="1">1 Question</option>
-            <option value="2">2 Questions</option>
-            <option value="3" selected>3 Questions</option>
-            <option value="5">5 Questions</option>
-            <option value="7">7 Questions</option>
-            <option value="10">10 Questions</option>
-          </select>
-        </div>
+        <label>Time Limit: <span id="tlVal" style="color:var(--gold);font-weight:700;">30</span> seconds</label>
+        <input type="range" id="timeLimit" min="10" max="60" value="30" style="width:100%;" oninput="document.getElementById('tlVal').textContent=this.value">
+        <label style="display:flex;align-items:center;gap:8px;margin-top:12px;color:var(--text);cursor:pointer;">
+          <input type="checkbox" id="umpireMode" style="width:auto;">
+          <span><b>Umpire Mode</b> (You organize & set questions only; ruling is always final)</span>
+        </label>
+        <button class="btn btn-gold" onclick="createRoom()">Generate Room Code</button>
       </div>
-      <label>Answer Time Limit (Same for All Players)</label>
-      <select id="timeLimit">
-        <option value="10">10 Seconds</option>
-        <option value="15">15 Seconds</option>
-        <option value="20">20 Seconds</option>
-        <option value="30" selected>30 Seconds</option>
-        <option value="45">45 Seconds</option>
-        <option value="60">60 Seconds</option>
-      </select>
-      <label class="chk-row">
-        <input type="checkbox" id="umpireMode">
-        <span><b>Umpire (Organizer) Mode</b> — You organize & set all questions without playing (Umpire rulings are final)</span>
-      </label>
-      <button class="btn btn-gold" onclick="createRoom()">Create Room & Get Code</button>
-    </div>
-  </div>
 
-  <!-- LOBBY VIEW -->
-  <div id="viewLobby" class="hidden">
-    <div class="card">
-      <div class="room-code-box">
-        <div style="font-size:0.8rem; color:var(--muted);">SHARE THIS ROOM CODE</div>
-        <div class="room-code" id="lobbyCode">----</div>
-        <button class="btn btn-dark btn-sm" onclick="copyInviteLink()">🔗 Copy One-Tap Invite Link</button>
-      </div>
-      <div id="lobbyMeta" style="margin-bottom:12px; font-size:0.9rem; color:var(--muted);"></div>
-      <h3>Joined Players</h3>
-      <div id="lobbyPlayers"></div>
-      <button id="startMatchBtn" class="btn btn-gold hidden" onclick="startMatch()">🚀 Start Match</button>
-      <div id="waitingHostMsg" style="text-align:center; color:var(--muted); margin-top:10px;">Waiting for host to start the match...</div>
-    </div>
-  </div>
-
-  <!-- GAME VIEW -->
-  <div id="viewGame" class="hidden">
-    <div class="card" style="padding:12px 16px;">
-      <div style="display:flex; justify-content:space-between; align-items:center;">
-        <span class="pill" id="turnBadge">Turn 1</span>
-        <span style="font-size:0.85rem; color:var(--muted);" id="roleInfo"></span>
+      <div id="joinTab" class="hidden">
+        <h3>Join Existing Room</h3>
+        <label>Your Name</label>
+        <input type="text" id="joinName" placeholder="Enter your name">
+        <label>4-Letter Room Code</label>
+        <input type="text" id="joinCode" maxlength="4" placeholder="e.g. SAGE" style="text-transform:uppercase;">
+        <button class="btn btn-teal" onclick="joinRoom()">Join Match</button>
       </div>
     </div>
 
-    <!-- ASKING PHASE -->
-    <div id="phaseAsking" class="card hidden">
-      <h3 id="askHeader">Set Your Question</h3>
-
-      <!-- Starter Prompt & QB Picker (Protected from polling reset) -->
-      <div style="background:var(--card2); padding:12px; border-radius:12px; margin-bottom:12px; border:1px solid rgba(245,185,66,0.22);">
-        <div style="font-size:0.82rem; font-weight:700; color:var(--gold); margin-bottom:6px;">⚡ Quick Fill (Editable Before Locking)</div>
-        <div class="row2">
-          <select id="starterSelect" onchange="loadStarterPrompt()">
-            <option value="">-- Pick Starter Prompt --</option>
-          </select>
-          <select id="qbSelect" onchange="loadSavedQb()">
-            <option value="">-- Pick From My QB's --</option>
-          </select>
-        </div>
-        <div style="display:flex; gap:8px; margin-top:8px;">
-          <button type="button" class="btn btn-dark btn-sm" onclick="loadNextUnusedQb()">⏭️ Next Unused QB</button>
-          <button type="button" class="btn btn-dark btn-sm" onclick="saveCurrentToQb()">💾 Save to My QB's</button>
-        </div>
-      </div>
-
-      <label>Question for Guesser</label>
-      <textarea id="inputQuestion" rows="2" placeholder="Type your question here..."></textarea>
-      <label>Secret Answer (Hidden from Guesser)</label>
-      <input id="inputAnswer" placeholder="Type exact secret answer...">
-      <button class="btn btn-gold" onclick="submitQuestion()">🔒 Lock Question & Start Timer</button>
-    </div>
-
-    <div id="phaseWaitAsker" class="card hidden" style="text-align:center;">
-      <h3 id="waitAskerTitle">Waiting for Question...</h3>
-      <p style="color:var(--muted);">The Manager is waiting for the question to be locked in.</p>
-    </div>
-
-    <!-- GUESSING PHASE -->
-    <div id="phaseGuessing" class="card hidden">
-      <div class="timer-bar" id="timerDisplay">30s</div>
-      <div style="font-size:0.85rem; color:var(--muted);">QUESTION:</div>
-      <div style="font-size:1.25rem; font-weight:800; margin:6px 0;" id="displayQuestion"></div>
-      <div class="hint-box" id="displayHint">MANAGER HINT: ...</div>
-
-      <div id="guesserControls" class="hidden">
-        <label>Your Answer</label>
-        <input id="inputGuess" placeholder="Type your guess fast..." onkeydown="if(event.key==='Enter') submitGuess(false)">
-        <button class="btn btn-teal" onclick="submitGuess(false)">✅ Submit Answer</button>
-      </div>
-      <div id="spectatorGuessMsg" class="hidden" style="text-align:center; color:var(--muted); margin-top:10px;">
-        Watching active guesser...
-      </div>
-    </div>
-
-    <!-- RESULT PHASE -->
-    <div id="phaseResult" class="card hidden">
-      <h3 id="resultHeadline">Round Result</h3>
-      <p id="resultDetails" style="line-height:1.5;"></p>
-      <div id="resolutionBanner" class="hint-box hidden"></div>
-
-      <!-- Contest Box (Only for Guesser in Standard Mode when marked wrong) -->
-      <div id="contestBox" class="hidden" style="margin-top:12px; padding:12px; background:var(--card2); border-radius:12px; border:1px solid var(--danger);">
-        <div style="font-size:0.85rem; color:var(--danger); font-weight:700; margin-bottom:6px;">Think your answer was actually right?</div>
-        <input id="contestReason" placeholder="Optional note (e.g., minor spelling typo)">
-        <button class="btn btn-danger" onclick="raiseContest()">⚖️ CONTEST ANSWER (Ask Asker to Review)</button>
-      </div>
-
-      <button id="nextTurnBtn" class="btn btn-gold hidden" onclick="nextTurn()">➡️ Next Turn</button>
-    </div>
-
-    <!-- CONTEST APPROVAL PHASE -->
-    <div id="phaseContest" class="card hidden">
-      <h3 style="color:var(--danger);">⚖️ Answer Contested!</h3>
-      <p id="contestDetails" style="line-height:1.5;"></p>
-      <div id="askerContestControls" class="hidden">
-        <button class="btn btn-teal" onclick="resolveContest('accept_guess')">✅ Accept Guess (+5 Pts to Guesser)</button>
-        <button class="btn btn-gold" onclick="resolveContest('new_question')">🔄 Void & Send New Question (0 Pts)</button>
-      </div>
-      <div id="waitContestMsg" class="hidden" style="color:var(--muted); text-align:center;">
-        Waiting for the Asker to accept the guess or send a new question...
-      </div>
-    </div>
-
-    <!-- LIVE SCOREBOARD -->
-    <div class="card">
-      <h3>📊 Live Standings (Tie-Breaker: Shortest Time)</h3>
-      <table>
-        <thead><tr><th>#</th><th>Player</th><th>Points</th><th>Time Spent</th></tr></thead>
-        <tbody id="liveScoreBody"></tbody>
-      </table>
-    </div>
-  </div>
-
-  <!-- GAME OVER VIEW -->
-  <div id="viewGameOver" class="hidden">
-    <div class="card" style="text-align:center;">
-      <div style="font-size:2.4rem;">🏆</div>
-      <h2 id="winnerBanner">Champion!</h2>
-      <p style="color:var(--muted);">Ties are broken automatically by shortest total answering time.</p>
-      <table>
-        <thead><tr><th>Rank</th><th>Player</th><th>Points</th><th>Total Time</th></tr></thead>
-        <tbody id="finalScoreBody"></tbody>
-      </table>
-      <button class="btn btn-gold" onclick="location.href='/'">🏠 Back to Home</button>
-    </div>
-  </div>
-</div>
-
-<!-- MY QB'S MODAL -->
-<div id="qbModal" class="hidden" style="position:fixed; inset:0; background:rgba(0,0,0,0.8); z-index:50; overflow-y:auto; padding:16px;">
-  <div class="card" style="max-width:560px; margin:20px auto;">
-    <div style="display:flex; justify-content:space-between; align-items:center;">
+    <!-- MY QB's MANAGER -->
+    <div id="qbCard" class="card hidden">
       <h3>📚 My QB's (Saved Question Banks)</h3>
-      <button class="btn btn-dark btn-sm" onclick="closeQbModal()">✕ Close</button>
+      <p style="font-size:0.82rem;color:var(--muted);margin:0 0 8px;">Save your favorite questions & answers on this device to load them with one tap during any round.</p>
+      <input type="text" id="qbNewQ" placeholder="New Question...">
+      <input type="text" id="qbNewA" placeholder="Secret Answer..." style="margin-top:6px;">
+      <button class="btn btn-teal" onclick="addQBItem()">+ Add to My QB's</button>
+      <div id="qbList" style="margin-top:10px;"></div>
     </div>
-    <p style="font-size:0.85rem; color:var(--muted);">Save questions and answers on your phone so you can pick them in one tap during any round.</p>
-    <label>New Question</label>
-    <input id="newQbQ" placeholder="e.g. Who scored the fastest Premier League hat-trick?">
-    <label>Secret Answer</label>
-    <input id="newQbA" placeholder="e.g. Sadio Mane">
-    <button class="btn btn-teal" onclick="addQbFromModal()">➕ Save to My QB's</button>
-    <hr style="border-color:rgba(255,255,255,0.1); margin:16px 0;">
-    <div id="qbListContainer"></div>
+  </div>
+
+  <!-- ROOM VIEW -->
+  <div id="roomView" class="hidden">
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <span style="color:var(--muted);font-size:0.85rem;">ROOM: <b id="roomCodeBadge" style="color:var(--gold);"></b></span>
+        <span id="modeBadge" style="font-size:0.78rem;color:var(--teal);font-weight:700;"></span>
+      </div>
+
+      <!-- LOBBY -->
+      <div id="lobbySec" class="hidden">
+        <div class="code-box" id="lobbyCode"></div>
+        <button class="btn btn-ghost" onclick="copyInvite()">🔗 Copy One-Tap Invite Link</button>
+        <div id="lobbyPlayers" style="margin-top:12px;"></div>
+        <button id="startBtn" class="btn btn-gold hidden" onclick="startGame()">Start Match</button>
+        <p id="waitHostMsg" class="hidden" style="text-align:center;color:var(--muted);font-size:0.88rem;">Waiting for host to start...</p>
+      </div>
+
+      <!-- ASKING -->
+      <div id="askSec" class="hidden">
+        <h3 id="askHeader"></h3>
+        <div id="askerForm" class="hidden">
+          <div class="row">
+            <select id="qbSelect" onchange="loadFromQBSelect()">
+              <option value="">-- Load from My QB's --</option>
+            </select>
+            <button class="btn btn-ghost" onclick="loadNextUnusedQB()" style="margin:0;flex:0.7;">⚡ Next QB</button>
+          </div>
+          <select id="starterSelect" onchange="loadFromStarter()" style="margin-top:8px;">
+            <option value="">-- Or Pick & Edit a Starter Prompt --</option>
+          </select>
+          <label>Question (Editable)</label>
+          <textarea id="qInput" rows="2" placeholder="Type or edit your question..."></textarea>
+          <label>Secret Answer (Editable)</label>
+          <input type="text" id="aInput" placeholder="Exact answer...">
+          <div class="row">
+            <button class="btn btn-ghost" onclick="saveCurrentToQB()">💾 Save to QB's</button>
+            <button class="btn btn-gold" onclick="submitQuestion()">Lock In Question</button>
+          </div>
+        </div>
+        <p id="waitAskerMsg" class="hidden" style="color:var(--muted);text-align:center;padding:16px 0;"></p>
+      </div>
+
+      <!-- GUESSING -->
+      <div id="guessSec" class="hidden">
+        <div class="timer" id="timerDisplay">30s</div>
+        <div style="font-size:0.85rem;color:var(--muted);">Question for <b id="guesserLabel" style="color:var(--gold);"></b>:</div>
+        <h3 id="liveQuestion" style="margin-top:6px;"></h3>
+        <div class="hint-box" id="liveHint"></div>
+        <div id="guesserForm" class="hidden">
+          <input type="text" id="guessInput" placeholder="Type your guess fast...">
+          <button class="btn btn-teal" onclick="submitGuess(false)">Submit Guess</button>
+        </div>
+        <p id="waitGuesserMsg" class="hidden" style="color:var(--muted);text-align:center;"></p>
+      </div>
+
+      <!-- RESULT -->
+      <div id="resultSec" class="hidden">
+        <h3 id="resBanner"></h3>
+        <p style="font-size:0.9rem;margin:6px 0;"><b>Question:</b> <span id="resQ"></span></p>
+        <p style="font-size:0.9rem;margin:6px 0;"><b>Guess:</b> <span id="resGuess"></span> | <b>Answer:</b> <span id="resAns" style="color:var(--gold);"></span></p>
+        <p style="font-size:0.82rem;color:var(--muted);" id="resTime"></p>
+        <div id="contestTriggerBox" class="hidden" style="margin-top:10px;padding-top:10px;border-top:1px solid #1e293b;">
+          <input type="text" id="contestReason" placeholder="Why was your answer right? (Optional)">
+          <button class="btn btn-danger" onclick="raiseContest()">⚖️ CONTEST ANSWER</button>
+        </div>
+        <button id="nextBtn" class="btn btn-gold hidden" onclick="nextTurn()">Next Round →</button>
+      </div>
+
+      <!-- CONTEST APPROVAL -->
+      <div id="contestSec" class="hidden">
+        <h3 style="color:var(--gold);">⚖️ Answer Contested!</h3>
+        <p id="contestDetails" style="font-size:0.9rem;"></p>
+        <div id="askerDecisionBox" class="hidden">
+          <button class="btn btn-ok" onclick="resolveContest('accept_guess')">✅ Accept Guess (+5 Pts to Guesser)</button>
+          <button class="btn btn-danger" onclick="resolveContest('reask')">🔄 Send New Question (0 Pts & Re-Ask)</button>
+        </div>
+        <p id="waitDecisionMsg" class="hidden" style="color:var(--muted);text-align:center;"></p>
+      </div>
+
+      <!-- GAME OVER -->
+      <div id="overSec" class="hidden">
+        <h2 style="color:var(--gold);text-align:center;">🏆 MATCH COMPLETE!</h2>
+        <p id="winnerBanner" style="text-align:center;font-weight:800;font-size:1.1rem;"></p>
+        <button class="btn btn-gold" onclick="location.href='/'">Play Again</button>
+      </div>
+    </div>
+
+    <!-- SCOREBOARD -->
+    <div class="card">
+      <h3>📊 Live Scoreboard (Tie-Breaker: Shortest Time)</h3>
+      <table>
+        <thead><tr><th>Rank</th><th>Player</th><th>Points</th><th>Time Spent</th></tr></thead>
+        <tbody id="scoreBody"></tbody>
+      </table>
+    </div>
   </div>
 </div>
 
 <script>
-const STARTERS = """ + repr([{"cat": c, "q": q, "a": a} for c, q, a in STARTER_PROMPTS]) + """;
-let myName = "";
-let roomCode = "";
-let sfxEnabled = true;
-let audioCtx = null;
-let lastPhaseKey = "";
-let lastTickSec = -1;
-let autoSubmittedTimeout = false;
-let usedQbIndices = new Set();
+const STARTERS = {{ starters | tojson }};
+let myName = "", roomCode = "", lastState = "", pollTimer = null, usedQBs = new Set();
 
+// --- AUDIO ENGINE (LOUD SYNTH MUSIC + SFX) ---
+let audioCtx = null, masterGain = null, musicOn = true, sfxOn = true, volume = 0.85, beatTimer = null, step = 0;
 function initAudio() {
   if (!audioCtx) {
-    const AC = window.AudioContext || window.webkitAudioContext;
-    if (AC) audioCtx = new AC();
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    masterGain = audioCtx.createGain();
+    masterGain.gain.value = volume;
+    masterGain.connect(audioCtx.destination);
   }
+  if (audioCtx.state === "suspended") audioCtx.resume();
 }
-
-function playTone(freq, duration, type="sine", delay=0) {
-  if (!sfxEnabled) return;
-  try {
-    initAudio();
-    if (!audioCtx) return;
-    const osc = audioCtx.createOscillator();
-    const gain = audioCtx.createGain();
-    osc.type = type;
-    osc.frequency.setValueAtTime(freq, audioCtx.currentTime + delay);
-    gain.gain.setValueAtTime(0.14, audioCtx.currentTime + delay);
-    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + delay + duration);
-    osc.connect(gain);
-    gain.connect(audioCtx.destination);
-    osc.start(audioCtx.currentTime + delay);
-    osc.stop(audioCtx.currentTime + delay + duration);
-  } catch (e) {}
+function setVol(v) {
+  volume = v / 100;
+  if (masterGain) masterGain.gain.value = volume;
 }
-
-function vibe(ms) {
-  if (sfxEnabled && navigator.vibrate) {
-    try { navigator.vibrate(ms); } catch (e) {}
-  }
+function toggleMusic() {
+  initAudio();
+  musicOn = !musicOn;
+  const b = document.getElementById("musicBtn");
+  b.textContent = musicOn ? "🎵 Music: ON" : "🎵 Music: OFF";
+  b.classList.toggle("active", musicOn);
 }
-
-function sfxLock() { playTone(520, 0.12, "triangle", 0); playTone(780, 0.18, "triangle", 0.1); vibe(40); }
-function sfxTick(urgent) { playTone(urgent ? 880 : 440, 0.06, "sine", 0); if (urgent) vibe(30); }
-function sfxWin() { playTone(523, 0.14, "triangle", 0); playTone(659, 0.14, "triangle", 0.12); playTone(784, 0.25, "triangle", 0.24); vibe([50,40,80]); }
-function sfxWrong() { playTone(220, 0.25, "sawtooth", 0); playTone(165, 0.3, "sawtooth", 0.18); vibe(120); }
-function sfxContest() { playTone(600, 0.12, "square", 0); playTone(450, 0.18, "square", 0.12); vibe([60,50,60]); }
-
 function toggleSfx() {
-  sfxEnabled = !sfxEnabled;
-  document.getElementById("sfxBtn").textContent = sfxEnabled ? "🔊 SFX ON" : "🔇 SFX OFF";
-  if (sfxEnabled) playTone(660, 0.1);
+  initAudio();
+  sfxOn = !sfxOn;
+  const b = document.getElementById("sfxBtn");
+  b.textContent = sfxOn ? "🔊 SFX: ON" : "🔊 SFX: OFF";
+  b.classList.toggle("active", sfxOn);
+}
+function playTone(freq, dur, type="triangle", gainVal=0.45) {
+  if (!sfxOn) return;
+  initAudio();
+  const osc = audioCtx.createOscillator();
+  const g = audioCtx.createGain();
+  osc.type = type;
+  osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+  g.gain.setValueAtTime(gainVal, audioCtx.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + dur);
+  osc.connect(g); g.connect(masterGain);
+  osc.start(); osc.stop(audioCtx.currentTime + dur);
+}
+function startBgMusic() {
+  if (beatTimer) return;
+  const notes = [130.81, 164.81, 196.00, 261.63, 196.00, 164.81, 146.83, 220.00];
+  beatTimer = setInterval(() => {
+    if (!musicOn || !audioCtx || audioCtx.state !== "running") return;
+    const osc = audioCtx.createOscillator();
+    const g = audioCtx.createGain();
+    osc.type = "sawtooth";
+    osc.frequency.setValueAtTime(notes[step % notes.length], audioCtx.currentTime);
+    g.gain.setValueAtTime(0.22, audioCtx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.24);
+    osc.connect(g); g.connect(masterGain);
+    osc.start(); osc.stop(audioCtx.currentTime + 0.25);
+    step++;
+  }, 280);
 }
 
-// QB's LocalStorage Helpers
-function getQbs() {
-  try { return JSON.parse(localStorage.getItem("double_sage_qbs") || "[]"); }
-  catch (e) { return []; }
+// --- 4-SLIDE INTRO SPLASH (3 SECONDS EACH) ---
+const SLIDES = [
+  { src: "/media/double_sage_icon.jpg", label: "DOUBLE SAGE" },
+  { src: "/media/double_sage_battle.jpg", label: "1v1 BATTLE OF WITS" },
+  { src: "/media/double_sage_banner.jpg", label: "OUTSMART • OUTGUESS • OUTSCORE" },
+  { src: "/media/double_sage_tournament.jpg", label: "2 TO 10 PLAYERS • FASTEST WINS" }
+];
+let splashInterval = null;
+function startSplash() {
+  const sp = document.getElementById("splash");
+  sp.classList.remove("hidden");
+  let idx = 0, elapsed = 0;
+  const totalPerSlide = 3000;
+  function showSlide(i) {
+    document.getElementById("splashImg").src = SLIDES[i].src;
+    document.getElementById("splashLabel").textContent = SLIDES[i].label;
+    for (let d = 0; d < 4; d++) document.getElementById("d" + d).classList.toggle("on", d === i);
+  }
+  showSlide(0);
+  if (splashInterval) clearInterval(splashInterval);
+  splashInterval = setInterval(() => {
+    elapsed += 100;
+    document.getElementById("progFill").style.width = ((elapsed % totalPerSlide) / totalPerSlide * 100) + "%";
+    if (elapsed >= totalPerSlide * (idx + 1)) {
+      idx++;
+      if (idx >= SLIDES.length) { closeSplash(); return; }
+      showSlide(idx);
+    }
+  }, 100);
 }
-function saveQbs(list) {
-  localStorage.setItem("double_sage_qbs", JSON.stringify(list));
-  refreshQbDropdown();
+function enableSoundAndSkip(closeAfter) {
+  initAudio(); startBgMusic(); playTone(523.25, 0.25);
+  if (closeAfter) closeSplash();
+}
+function closeSplash() {
+  if (splashInterval) clearInterval(splashInterval);
+  document.getElementById("splash").classList.add("hidden");
+  initAudio(); startBgMusic();
 }
 
-function populateStarterDropdown() {
-  const sel = document.getElementById("starterSelect");
-  sel.innerHTML = '<option value="">-- Pick Starter Prompt --</option>';
-  STARTERS.forEach((item, idx) => {
-    const opt = document.createElement("option");
-    opt.value = idx;
-    opt.textContent = `[${item.cat}] ${item.q}`;
-    sel.appendChild(opt);
+// --- QB's (SAVED QUESTION BANKS) ---
+function getQBs() {
+  try { return JSON.parse(localStorage.getItem("ds_qbs") || "[]"); } catch { return []; }
+}
+function saveQBs(list) {
+  localStorage.setItem("ds_qbs", JSON.stringify(list));
+  renderQBList(); refreshQBDropdown();
+}
+function toggleQBModal() {
+  document.getElementById("qbCard").classList.toggle("hidden");
+  renderQBList();
+}
+function addQBItem() {
+  const q = document.getElementById("qbNewQ").value.trim();
+  const a = document.getElementById("qbNewA").value.trim();
+  if (!q || !a) return alert("Enter both question and answer.");
+  const list = getQBs();
+  list.push({ q, a });
+  saveQBs(list);
+  document.getElementById("qbNewQ").value = "";
+  document.getElementById("qbNewA").value = "";
+  playTone(659.25, 0.2);
+}
+function deleteQBItem(i) {
+  const list = getQBs(); list.splice(i, 1); saveQBs(list);
+}
+function renderQBList() {
+  const list = getQBs();
+  const el = document.getElementById("qbList");
+  el.innerHTML = list.length ? "" : "<p style='color:var(--muted);font-size:0.82rem;'>No saved QB's yet.</p>";
+  list.forEach((item, i) => {
+    el.innerHTML += `<div class="qb-item"><div><b>${item.q}</b><br><span style="color:var(--gold);font-size:0.78rem;">Ans: ${item.a}</span></div><button class="pill" onclick="deleteQBItem(${i})">✕</button></div>`;
   });
 }
-
-function refreshQbDropdown() {
+function refreshQBDropdown() {
   const sel = document.getElementById("qbSelect");
-  if (!sel) return;
-  const currentVal = sel.value;
-  const qbs = getQbs();
-  sel.innerHTML = `<option value="">-- Pick From My QB's (${qbs.length}) --</option>`;
-  qbs.forEach((item, idx) => {
+  const curVal = sel.value;
+  const list = getQBs();
+  sel.innerHTML = `<option value="">-- Load from My QB's (${list.length}) --</option>`;
+  list.forEach((item, i) => {
     const opt = document.createElement("option");
-    opt.value = idx;
-    opt.textContent = `${usedQbIndices.has(idx) ? '✓ ' : ''}${item.q}`;
+    opt.value = i;
+    opt.textContent = (usedQBs.has(i) ? "✓ " : "") + item.q.slice(0, 48);
     sel.appendChild(opt);
   });
-  sel.value = currentVal;
+  sel.value = curVal;
 }
-
-function loadStarterPrompt() {
-  const idx = document.getElementById("starterSelect").value;
-  if (idx === "") return;
-  const item = STARTERS[parseInt(idx, 10)];
-  document.getElementById("inputQuestion").value = item.q;
-  document.getElementById("inputAnswer").value = item.a;
-  playTone(540, 0.08);
-}
-
-function loadSavedQb() {
+function loadFromQBSelect() {
   const idx = document.getElementById("qbSelect").value;
   if (idx === "") return;
-  const i = parseInt(idx, 10);
-  const qbs = getQbs();
-  if (qbs[i]) {
-    document.getElementById("inputQuestion").value = qbs[i].q;
-    document.getElementById("inputAnswer").value = qbs[i].a;
-    usedQbIndices.add(i);
-    refreshQbDropdown();
-    playTone(620, 0.08);
+  const item = getQBs()[idx];
+  if (item) {
+    document.getElementById("qInput").value = item.q;
+    document.getElementById("aInput").value = item.a;
+    usedQBs.add(Number(idx));
+    playTone(587.33, 0.15);
   }
 }
-
-function loadNextUnusedQb() {
-  const qbs = getQbs();
-  if (!qbs.length) { alert("Your QB's bank is empty! Add questions in My QB's first."); return; }
-  let found = -1;
-  for (let i = 0; i < qbs.length; i++) {
-    if (!usedQbIndices.has(i)) { found = i; break; }
-  }
-  if (found === -1) { usedQbIndices.clear(); found = 0; }
-  document.getElementById("inputQuestion").value = qbs[found].q;
-  document.getElementById("inputAnswer").value = qbs[found].a;
-  usedQbIndices.add(found);
-  refreshQbDropdown();
-  playTone(660, 0.1);
+function loadNextUnusedQB() {
+  const list = getQBs();
+  if (!list.length) return alert("Your QB bank is empty! Add questions under My QB's first.");
+  let idx = list.findIndex((_, i) => !usedQBs.has(i));
+  if (idx === -1) { usedQBs.clear(); idx = 0; }
+  usedQBs.add(idx);
+  document.getElementById("qInput").value = list[idx].q;
+  document.getElementById("aInput").value = list[idx].a;
+  refreshQBDropdown();
+  playTone(659.25, 0.15);
 }
-
-function saveCurrentToQb() {
-  const q = document.getElementById("inputQuestion").value.trim();
-  const a = document.getElementById("inputAnswer").value.trim();
-  if (!q || !a) { alert("Type both a question and answer first."); return; }
-  const qbs = getQbs();
-  qbs.push({ q, a });
-  saveQbs(qbs);
-  playTone(740, 0.12);
+function saveCurrentToQB() {
+  const q = document.getElementById("qInput").value.trim();
+  const a = document.getElementById("aInput").value.trim();
+  if (!q || !a) return alert("Type a question and answer first.");
+  const list = getQBs();
+  list.push({ q, a });
+  saveQBs(list);
   alert("Saved to My QB's!");
 }
-
-function openQbModal() {
-  renderQbModalList();
-  document.getElementById("qbModal").classList.remove("hidden");
+function initStarterDropdown() {
+  const sel = document.getElementById("starterSelect");
+  STARTERS.forEach((s, i) => {
+    const opt = document.createElement("option");
+    opt.value = i;
+    opt.textContent = `[${s[0]}] ${s[1].slice(0, 45)}`;
+    sel.appendChild(opt);
+  });
 }
-function closeQbModal() {
-  document.getElementById("qbModal").classList.add("hidden");
-}
-function addQbFromModal() {
-  const q = document.getElementById("newQbQ").value.trim();
-  const a = document.getElementById("newQbA").value.trim();
-  if (!q || !a) { alert("Enter both a question and secret answer."); return; }
-  const qbs = getQbs();
-  qbs.push({ q, a });
-  saveQbs(qbs);
-  document.getElementById("newQbQ").value = "";
-  document.getElementById("newQbA").value = "";
-  renderQbModalList();
-  playTone(720, 0.1);
-}
-function deleteQb(idx) {
-  const qbs = getQbs();
-  qbs.splice(idx, 1);
-  usedQbIndices.clear();
-  saveQbs(qbs);
-  renderQbModalList();
-}
-function renderQbModalList() {
-  const box = document.getElementById("qbListContainer");
-  const qbs = getQbs();
-  if (!qbs.length) {
-    box.innerHTML = '<div style="color:var(--muted); text-align:center;">No saved questions yet.</div>';
-    return;
-  }
-  box.innerHTML = qbs.map((item, i) => `
-    <div class="qb-item">
-      <div>
-        <div style="font-weight:700; font-size:0.92rem;">${escapeHtml(item.q)}</div>
-        <div style="font-size:0.8rem; color:var(--teal);">Answer: ${escapeHtml(item.a)}</div>
-      </div>
-      <button class="btn btn-danger btn-sm" onclick="deleteQb(${i})">🗑️</button>
-    </div>
-  `).join("");
+function loadFromStarter() {
+  const idx = document.getElementById("starterSelect").value;
+  if (idx === "") return;
+  const s = STARTERS[idx];
+  document.getElementById("qInput").value = s[1];
+  document.getElementById("aInput").value = s[2];
+  playTone(523.25, 0.15);
 }
 
-function escapeHtml(s) {
-  return String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+// --- ROOM & GAMEPLAY ---
+function showTab(id) {
+  document.getElementById("createTab").classList.toggle("hidden", id !== "createTab");
+  document.getElementById("joinTab").classList.toggle("hidden", id !== "joinTab");
 }
-
+async function api(url, body) {
+  const res = await fetch(url, { method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(body) });
+  return res.json();
+}
 async function createRoom() {
-  initAudio();
-  const name = document.getElementById("hostName").value.trim();
-  if (!name) { alert("Enter your name first."); return; }
-  const res = await fetch("/api/create", {
-    method: "POST",
-    headers: {"Content-Type": "application/json"},
-    body: JSON.stringify({
-      name,
-      max_players: document.getElementById("maxPlayers").value,
-      questions_per_player: document.getElementById("qPerPlayer").value,
-      time_limit: document.getElementById("timeLimit").value,
-      umpire_mode: document.getElementById("umpireMode").checked
-    })
+  initAudio(); startBgMusic();
+  myName = document.getElementById("hostName").value.trim() || "Host";
+  const data = await api("/api/create", {
+    name: myName,
+    max_players: document.getElementById("maxPlayers").value,
+    q_per_player: document.getElementById("qPerPlayer").value,
+    time_limit: document.getElementById("timeLimit").value,
+    umpire_mode: document.getElementById("umpireMode").checked
   });
-  const data = await res.json();
-  if (!data.ok) { alert(data.error); return; }
-  myName = data.name;
-  roomCode = data.code;
-  sfxLock();
-  startPolling();
+  if (data.ok) enterRoom(data.room);
 }
-
 async function joinRoom() {
-  initAudio();
-  const name = document.getElementById("joinName").value.trim();
+  initAudio(); startBgMusic();
+  myName = document.getElementById("joinName").value.trim();
   const code = document.getElementById("joinCode").value.trim().toUpperCase();
-  if (!name || !code) { alert("Enter both your name and the 4-letter room code."); return; }
-  const res = await fetch("/api/join", {
-    method: "POST",
-    headers: {"Content-Type": "application/json"},
-    body: JSON.stringify({ name, code })
-  });
-  const data = await res.json();
-  if (!data.ok) { alert(data.error); return; }
-  myName = data.name;
-  roomCode = data.code;
-  sfxLock();
-  startPolling();
+  if (!myName || !code) return alert("Enter your name and 4-letter room code.");
+  const data = await api("/api/join", { name: myName, code });
+  if (!data.ok) return alert(data.error);
+  enterRoom(data.room);
 }
-
-function copyInviteLink() {
-  const url = `${location.origin}/?room=${roomCode}`;
-  navigator.clipboard.writeText(url).then(() => alert("Invite link copied: " + url));
+function enterRoom(room) {
+  roomCode = room.code;
+  document.getElementById("homeView").classList.add("hidden");
+  document.getElementById("roomView").classList.remove("hidden");
+  renderRoom(room);
+  if (pollTimer) clearInterval(pollTimer);
+  pollTimer = setInterval(async () => {
+    const r = await fetch(`/api/state?code=${roomCode}`).then(x => x.json());
+    if (r.ok) renderRoom(r.room);
+  }, 1200);
 }
-
+function copyInvite() {
+  const link = `${location.origin}/?room=${roomCode}`;
+  navigator.clipboard.writeText(link);
+  alert("Invite link copied! Share it with friends:\n" + link);
+}
 async function kickPlayer(target) {
-  await fetch("/api/kick", {
-    method: "POST",
-    headers: {"Content-Type": "application/json"},
-    body: JSON.stringify({ code: roomCode, requester: myName, target })
-  });
+  const data = await api("/api/kick", { code: roomCode, host: myName, target });
+  if (data.ok) renderRoom(data.room);
 }
-
-async function startMatch() {
-  const res = await fetch("/api/start", {
-    method: "POST",
-    headers: {"Content-Type": "application/json"},
-    body: JSON.stringify({ code: roomCode, requester: myName })
-  });
-  const data = await res.json();
-  if (!data.ok) alert(data.error);
+async function startGame() {
+  const data = await api("/api/start", { code: roomCode, host: myName });
+  if (!data.ok) return alert(data.error);
+  playTone(659.25, 0.3);
+  renderRoom(data.room);
 }
-
 async function submitQuestion() {
-  const question = document.getElementById("inputQuestion").value.trim();
-  const answer = document.getElementById("inputAnswer").value.trim();
-  if (!question || !answer) { alert("Enter both a question and secret answer."); return; }
-  const res = await fetch("/api/set_question", {
-    method: "POST",
-    headers: {"Content-Type": "application/json"},
-    body: JSON.stringify({ code: roomCode, name: myName, question, answer })
-  });
-  const data = await res.json();
-  if (!data.ok) { alert(data.error); return; }
-  document.getElementById("inputQuestion").value = "";
-  document.getElementById("inputAnswer").value = "";
-  document.getElementById("starterSelect").value = "";
-  document.getElementById("qbSelect").value = "";
-  sfxLock();
+  const q = document.getElementById("qInput").value.trim();
+  const a = document.getElementById("aInput").value.trim();
+  if (!q || !a) return alert("Enter both question and answer.");
+  const data = await api("/api/ask", { code: roomCode, asker: myName, question: q, answer: a });
+  if (!data.ok) return alert(data.error);
+  document.getElementById("qInput").value = "";
+  document.getElementById("aInput").value = "";
+  playTone(783.99, 0.25);
+  renderRoom(data.room);
 }
-
 async function submitGuess(timedOut) {
-  const guess = document.getElementById("inputGuess").value.trim();
-  await fetch("/api/submit_guess", {
-    method: "POST",
-    headers: {"Content-Type": "application/json"},
-    body: JSON.stringify({ code: roomCode, name: myName, guess, timed_out: timedOut })
-  });
-  document.getElementById("inputGuess").value = "";
+  const g = document.getElementById("guessInput").value.trim();
+  const data = await api("/api/guess", { code: roomCode, guesser: myName, guess: g, timed_out: timedOut });
+  document.getElementById("guessInput").value = "";
+  if (data.ok) renderRoom(data.room);
 }
-
 async function raiseContest() {
   const reason = document.getElementById("contestReason").value.trim();
-  await fetch("/api/contest", {
-    method: "POST",
-    headers: {"Content-Type": "application/json"},
-    body: JSON.stringify({ code: roomCode, name: myName, reason })
-  });
-  sfxContest();
+  const data = await api("/api/contest", { code: roomCode, guesser: myName, reason });
+  if (data.ok) { playTone(330, 0.3, "sawtooth"); renderRoom(data.room); }
 }
-
 async function resolveContest(decision) {
-  await fetch("/api/resolve_contest", {
-    method: "POST",
-    headers: {"Content-Type": "application/json"},
-    body: JSON.stringify({ code: roomCode, name: myName, decision })
-  });
+  const data = await api("/api/resolve_contest", { code: roomCode, asker: myName, decision });
+  if (data.ok) renderRoom(data.room);
 }
-
 async function nextTurn() {
-  await fetch("/api/next_turn", {
-    method: "POST",
-    headers: {"Content-Type": "application/json"},
-    body: JSON.stringify({ code: roomCode })
-  });
+  const data = await api("/api/next", { code: roomCode });
+  if (data.ok) renderRoom(data.room);
 }
 
-let pollTimer = null;
-function startPolling() {
-  document.getElementById("viewHome").classList.add("hidden");
-  if (pollTimer) clearInterval(pollTimer);
-  fetchState();
-  pollTimer = setInterval(fetchState, 1200);
-}
+let lastBeepSec = -1;
+function renderRoom(room) {
+  document.getElementById("roomCodeBadge").textContent = room.code;
+  document.getElementById("modeBadge").textContent = room.umpire_mode ? `UMPIRE: ${room.host}` : `${room.time_limit}s LIMIT`;
 
-async function fetchState() {
-  if (!roomCode) return;
-  const res = await fetch(`/api/state?code=${encodeURIComponent(roomCode)}&name=${encodeURIComponent(myName)}`);
-  const st = await res.json();
-  if (!st.ok) {
-    if (st.kicked) {
-      clearInterval(pollTimer);
-      alert(st.error);
-      location.href = "/";
+  // Scoreboard sorted by highest points, then shortest time spent
+  const sorted = [...room.players].sort((a, b) => (b.score - a.score) || (a.time_spent - b.time_spent));
+  document.getElementById("scoreBody").innerHTML = sorted.map((p, i) =>
+    `<tr><td>#${i+1}</td><td><b>${p.name}</b></td><td style="color:var(--gold);font-weight:700;">${p.score} pts</td><td>${p.time_spent.toFixed(1)}s</td></tr>`
+  ).join("");
+
+  ["lobbySec","askSec","guessSec","resultSec","contestSec","overSec"].forEach(id => document.getElementById(id).classList.add("hidden"));
+
+  const stateKey = `${room.state}_${room.turn_idx}`;
+  if (stateKey !== lastState) {
+    lastState = stateKey;
+    if (room.state === "result" && room.result) {
+      room.result.correct ? playTone(880, 0.35) : playTone(196, 0.35, "sawtooth");
     }
-    return;
+    if (room.state === "asking") { refreshQBDropdown(); }
   }
 
-  document.getElementById("viewLobby").classList.toggle("hidden", st.status !== "lobby");
-  document.getElementById("viewGame").classList.toggle("hidden", st.status !== "playing");
-  document.getElementById("viewGameOver").classList.toggle("hidden", st.status !== "gameover");
-
-  if (st.status === "lobby") {
-    document.getElementById("lobbyCode").textContent = st.code;
-    document.getElementById("lobbyMeta").textContent =
-      `${st.umpire_mode ? '⚖️ Umpire Mode (' + st.umpire_name + ') • ' : ''}Up to ${st.max_players} players • ${st.questions_per_player} Qs each • ${st.time_limit}s timer`;
-
-    const isHost = (st.host === myName);
-    document.getElementById("lobbyPlayers").innerHTML = st.players.map(p => `
-      <div class="player-item">
-        <span><b>${escapeHtml(p.name)}</b> ${p.name === st.host ? '<span class="pill">HOST</span>' : ''}</span>
-        ${isHost && p.name !== myName ? `<button class="btn btn-danger btn-sm" onclick="kickPlayer('${escapeHtml(p.name)}')">Kick</button>` : ''}
-      </div>
-    `).join("") || '<div style="color:var(--muted);">Waiting for competing players to join...</div>';
-
-    document.getElementById("startMatchBtn").classList.toggle("hidden", !isHost);
-    document.getElementById("waitingHostMsg").classList.toggle("hidden", isHost);
+  if (room.state === "lobby") {
+    document.getElementById("lobbySec").classList.remove("hidden");
+    document.getElementById("lobbyCode").textContent = room.code;
+    const isHost = (myName === room.host);
+    document.getElementById("lobbyPlayers").innerHTML = room.players.map(p =>
+      `<div class="qb-item"><span>👤 <b>${p.name}</b></span>${isHost && p.name !== myName ? `<button class="pill" onclick="kickPlayer('${p.name}')">Kick</button>` : ""}</div>`
+    ).join("");
+    document.getElementById("startBtn").classList.toggle("hidden", !isHost);
+    document.getElementById("waitHostMsg").classList.toggle("hidden", isHost);
   }
-
-  if (st.status === "playing" && st.turn) {
-    const phaseKey = `${st.turn_number}-${st.phase}`;
-    const phaseChanged = (phaseKey !== lastPhaseKey);
-    lastPhaseKey = phaseKey;
-
-    document.getElementById("turnBadge").textContent = `Turn ${st.turn_number} of ${st.total_turns}`;
-    document.getElementById("roleInfo").textContent = `Asker: ${st.turn.asker} → Guesser: ${st.turn.guesser}`;
-
-    const isAsker = (st.turn.asker === myName);
-    const isGuesser = (st.turn.guesser === myName);
-
-    document.getElementById("phaseAsking").classList.toggle("hidden", !(st.phase === "asking" && isAsker));
-    document.getElementById("phaseWaitAsker").classList.toggle("hidden", !(st.phase === "asking" && !isAsker));
-    document.getElementById("phaseGuessing").classList.toggle("hidden", st.phase !== "guessing");
-    document.getElementById("phaseResult").classList.toggle("hidden", st.phase !== "result");
-    document.getElementById("phaseContest").classList.toggle("hidden", st.phase !== "contest_review");
-
-    if (st.phase === "asking") {
-      autoSubmittedTimeout = false;
-      if (isAsker && phaseChanged) {
-        document.getElementById("askHeader").textContent = `Set Question for ${st.turn.guesser}`;
-        refreshQbDropdown();
-      } else if (!isAsker) {
-        document.getElementById("waitAskerTitle").textContent = `${st.turn.asker} is preparing a question for ${st.turn.guesser}...`;
-      }
-    }
-
-    if (st.phase === "guessing") {
-      const rem = Math.ceil(st.remaining);
-      const tEl = document.getElementById("timerDisplay");
-      tEl.textContent = `⏱️ ${rem}s`;
-      tEl.classList.toggle("timer-urgent", rem <= 5);
-      if (rem !== lastTickSec && rem > 0) {
-        lastTickSec = rem;
-        sfxTick(rem <= 5);
-      }
-      document.getElementById("displayQuestion").textContent = st.current_question;
-      document.getElementById("displayHint").textContent = `MANAGER HINT: ${st.current_hint}`;
-      document.getElementById("guesserControls").classList.toggle("hidden", !isGuesser);
-      document.getElementById("spectatorGuessMsg").classList.toggle("hidden", isGuesser);
-
-      if (isGuesser && st.remaining <= 0 && !autoSubmittedTimeout) {
-        autoSubmittedTimeout = true;
-        submitGuess(true);
-      }
-    }
-
-    if (st.phase === "result" && st.last_result) {
-      const r = st.last_result;
-      if (phaseChanged) { r.correct ? sfxWin() : sfxWrong(); }
-      document.getElementById("resultHeadline").textContent = r.correct
-        ? `✅ Spot On! +5 Pts to ${r.guesser}`
-        : (r.is_umpire ? `❌ Incorrect! (Umpire Ruling Final)` : `❌ Missed! +5 Pts to ${r.asker}`);
-      document.getElementById("resultDetails").innerHTML =
-        `<b>Question:</b> ${escapeHtml(r.question)}<br>` +
-        `<b>${escapeHtml(r.guesser)}'s Guess:</b> ${escapeHtml(r.guess)} (${r.elapsed}s)<br>` +
-        `<b>Secret Answer:</b> <span style="color:var(--gold); font-weight:800;">${escapeHtml(r.answer)}</span>`;
-
-      const resBan = document.getElementById("resolutionBanner");
-      if (r.resolution_note) {
-        resBan.textContent = r.resolution_note;
-        resBan.classList.remove("hidden");
-      } else {
-        resBan.classList.add("hidden");
-      }
-
-      const canContest = (!r.is_umpire && isGuesser && !r.correct && !r.contested);
-      document.getElementById("contestBox").classList.toggle("hidden", !canContest);
-      const canAdvance = (isAsker || st.host === myName);
-      document.getElementById("nextTurnBtn").classList.toggle("hidden", !canAdvance);
-    }
-
-    if (st.phase === "contest_review" && st.contest && st.last_result) {
-      if (phaseChanged) sfxContest();
-      const c = st.contest;
-      const r = st.last_result;
-      document.getElementById("contestDetails").innerHTML =
-        `<b>${escapeHtml(c.guesser)}</b> contested the result!<br>` +
-        `<b>Typed Guess:</b> ${escapeHtml(r.guess)}<br>` +
-        `<b>Secret Answer:</b> ${escapeHtml(r.answer)}<br>` +
-        `<b>Reason:</b> ${escapeHtml(c.reason)}`;
-      document.getElementById("askerContestControls").classList.toggle("hidden", !isAsker);
-      document.getElementById("waitContestMsg").classList.toggle("hidden", isAsker);
-    }
-
-    document.getElementById("liveScoreBody").innerHTML = st.standings.map((p, idx) => `
-      <tr>
-        <td><b>#${idx + 1}</b></td>
-        <td>${escapeHtml(p.name)}</td>
-        <td style="color:var(--gold); font-weight:800;">${p.score} pts</td>
-        <td>${p.time_spent.toFixed(1)}s</td>
-      </tr>
-    `).join("");
+  else if (room.state === "asking") {
+    document.getElementById("askSec").classList.remove("hidden");
+    const turn = room.queue[room.turn_idx];
+    document.getElementById("askHeader").textContent = `Round ${room.turn_idx + 1}/${room.queue.length}: ${turn.asker} → ${turn.guesser}`;
+    const isAsker = (myName === turn.asker);
+    // Do NOT touch inputs while Asker is typing/selecting!
+    document.getElementById("askerForm").classList.toggle("hidden", !isAsker);
+    document.getElementById("waitAskerMsg").classList.toggle("hidden", isAsker);
+    if (!isAsker) document.getElementById("waitAskerMsg").textContent = `Waiting for ${turn.asker} to set a question for ${turn.guesser}...`;
   }
-
-  if (st.status === "gameover") {
-    if (lastPhaseKey !== "gameover") { lastPhaseKey = "gameover"; sfxWin(); }
-    const champ = st.standings[0];
-    document.getElementById("winnerBanner").textContent = champ
-      ? `Champion: ${champ.name} (${champ.score} pts • ${champ.time_spent.toFixed(1)}s)`
-      : "Match Complete!";
-    document.getElementById("finalScoreBody").innerHTML = st.standings.map((p, idx) => `
-      <tr>
-        <td><b>#${idx + 1}</b></td>
-        <td>${escapeHtml(p.name)}</td>
-        <td style="color:var(--gold); font-weight:800;">${p.score} pts</td>
-        <td>${p.time_spent.toFixed(1)}s</td>
-      </tr>
-    `).join("");
+  else if (room.state === "guessing") {
+    document.getElementById("guessSec").classList.remove("hidden");
+    const cur = room.current;
+    const rem = Math.max(0, Math.ceil(room.time_limit - (Date.now()/1000 - cur.start_ts)));
+    const tEl = document.getElementById("timerDisplay");
+    tEl.textContent = rem + "s";
+    tEl.classList.toggle("urgent", rem <= 5);
+    if (rem <= 5 && rem > 0 && rem !== lastBeepSec) { lastBeepSec = rem; playTone(987.77, 0.08); }
+    document.getElementById("guesserLabel").textContent = cur.guesser;
+    document.getElementById("liveQuestion").textContent = cur.question;
+    document.getElementById("liveHint").textContent = "MANAGER HINT: " + cur.hint;
+    const isGuesser = (myName === cur.guesser);
+    document.getElementById("guesserForm").classList.toggle("hidden", !isGuesser);
+    document.getElementById("waitGuesserMsg").classList.toggle("hidden", isGuesser);
+    if (!isGuesser) document.getElementById("waitGuesserMsg").textContent = `${cur.guesser} is guessing...`;
+  }
+  else if (room.state === "result") {
+    document.getElementById("resultSec").classList.remove("hidden");
+    const res = room.result;
+    const b = document.getElementById("resBanner");
+    b.textContent = res.correct ? `✅ SPOT ON! +5 Pts to ${res.guesser}` : (room.umpire_mode ? `❌ WRONG! Umpire's Ruling is Final` : `❌ WRONG! +5 Pts to ${res.asker}`);
+    b.style.color = res.correct ? "var(--ok)" : "var(--danger)";
+    document.getElementById("resQ").textContent = res.question;
+    document.getElementById("resGuess").textContent = res.guess;
+    document.getElementById("resAns").textContent = res.answer;
+    document.getElementById("resTime").textContent = `Time taken: ${res.elapsed.toFixed(1)}s`;
+    const canContest = (!room.umpire_mode && !res.correct && !res.contested && myName === res.guesser);
+    document.getElementById("contestTriggerBox").classList.toggle("hidden", !canContest);
+    const canAdvance = (myName === res.asker || myName === room.host);
+    document.getElementById("nextBtn").classList.toggle("hidden", !canAdvance);
+  }
+  else if (room.state === "contest") {
+    document.getElementById("contestSec").classList.remove("hidden");
+    const c = room.contest;
+    document.getElementById("contestDetails").innerHTML = `<b>${c.guesser}</b> contested the result!<br>Reason: <i>"${c.reason}"</i><br>Asker (<b>${c.asker}</b>) must decide:`;
+    const isAsker = (myName === c.asker);
+    document.getElementById("askerDecisionBox").classList.toggle("hidden", !isAsker);
+    document.getElementById("waitDecisionMsg").classList.toggle("hidden", isAsker);
+    if (!isAsker) document.getElementById("waitDecisionMsg").textContent = `Waiting for ${c.asker} to accept the guess or send a new question...`;
+  }
+  else if (room.state === "gameover") {
+    document.getElementById("overSec").classList.remove("hidden");
+    if (sorted.length) {
+      document.getElementById("winnerBanner").textContent = `👑 ${sorted[0].name} wins with ${sorted[0].score} pts (${sorted[0].time_spent.toFixed(1)}s)!`;
+    }
   }
 }
 
-// Init on load
-populateStarterDropdown();
-refreshQbDropdown();
-const urlParams = new URLSearchParams(window.location.search);
-if (urlParams.get("room")) {
-  document.getElementById("joinCode").value = urlParams.get("room").toUpperCase();
-}
+window.onload = () => {
+  initStarterDropdown();
+  const params = new URLSearchParams(location.search);
+  if (params.get("room")) {
+    showTab("joinTab");
+    document.getElementById("joinCode").value = params.get("room").toUpperCase();
+  }
+  startSplash();
+};
 </script>
 </body>
 </html>
@@ -1188,8 +936,8 @@ if (urlParams.get("room")) {
 
 @app.route("/")
 def index():
-    return HTML_PAGE
+    return render_template_string(HTML_PAGE, starters=STARTER_PROMPTS)
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port)
+    app.run(host="0.0.0.0", port=port)\n
