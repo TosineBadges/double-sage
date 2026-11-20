@@ -363,6 +363,22 @@ HTML_PAGE = """<!DOCTYPE html>
   .prog { width:240px; height:5px; background:#1e293b; border-radius:99px; overflow:hidden; margin-bottom:14px; }
   .prog-fill { height:100%; width:0%; background:linear-gradient(90deg,var(--gold),var(--teal)); transition:width 0.1s linear; }
   .qb-item { display:flex; justify-content:space-between; align-items:center; background:#0b1120; padding:8px 10px; border-radius:8px; margin-top:6px; font-size:0.85rem; }
+#introOverlay, .intro-overlay {
+  position: fixed !important;
+  inset: 0 !important;
+  z-index: 99990 !important;
+  background: #070b14 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+#introOverlay button, .intro-overlay button {
+  position: relative !important;
+  z-index: 99999 !important;
+  pointer-events: auto !important;
+  cursor: pointer !important;
+}
 </style>
 </head>
 <body>
@@ -929,6 +945,62 @@ window.onload = () => {
   }
   startSplash();
 };
+window.skipIntro = function() {
+  if (window.introTimer) clearInterval(window.introTimer);
+  const ov = document.getElementById('introOverlay') || document.querySelector('.intro-overlay');
+  if (ov) ov.style.display = 'none';
+  if (window.unlockAudio) window.unlockAudio();
+};
+
+let audioCtx = null, masterGain = null, bgmTimer = null;
+let musicOn = true, sfxOn = true, masterVol = 0.9;
+
+window.unlockAudio = function() {
+  if (!audioCtx) {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    audioCtx = new AC();
+    const comp = audioCtx.createDynamicsCompressor();
+    comp.threshold.value = -12;
+    comp.ratio.value = 8;
+    masterGain = audioCtx.createGain();
+    masterGain.gain.value = masterVol;
+    comp.connect(masterGain);
+    masterGain.connect(audioCtx.destination);
+    window._audioOut = comp;
+  }
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+  if (musicOn && !bgmTimer) startBgm();
+};
+
+function startBgm() {
+  const notes = [130.81, 164.81, 196.00, 261.63, 196.00, 164.81, 146.83, 220.00];
+  let step = 0;
+  bgmTimer = setInterval(() => {
+    if (!musicOn || !audioCtx || audioCtx.state !== 'running') return;
+    const osc = audioCtx.createOscillator();
+    const g = audioCtx.createGain();
+    osc.type = 'sawtooth';
+    osc.frequency.value = notes[step % notes.length];
+    g.gain.setValueAtTime(0.28, audioCtx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.22);
+    osc.connect(g);
+    g.connect(window._audioOut);
+    osc.start();
+    osc.stop(audioCtx.currentTime + 0.24);
+    step++;
+  }, 260);
+}
+
+// Automatically connect any "Skip" button on the intro screen
+document.querySelectorAll('#introOverlay button, .intro-overlay button').forEach(btn => {
+  if (btn.textContent.toLowerCase().includes('skip')) {
+    btn.onclick = window.skipIntro;
+  }
+});
+
+// Auto-unlock loud sound on the player's very first tap anywhere
+document.addEventListener('pointerdown', window.unlockAudio, { once: true });
+
 </script>
 </body>
 </html>
