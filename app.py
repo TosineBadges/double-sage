@@ -876,6 +876,33 @@ window.addEventListener("DOMContentLoaded", () => {
   const autoRoom = params.get("room");
   if (autoRoom) document.getElementById("jCode").value = autoRoom.toUpperCase();
 });
+(function() {
+  const inp = document.querySelector('input[type="file"][accept*="audio"]');
+  if (!inp) return;
+  const host = inp.closest('label, button') || inp;
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.id = 'resetThemeBtn';
+  btn.textContent = '🔄 Default Theme';
+  btn.style.cssText = 'display:none;background:#1e293b;color:#38bdf8;border:1px solid #38bdf8;padding:4px 10px;border-radius:999px;font-size:12px;cursor:pointer;margin-left:6px;';
+  host.insertAdjacentElement('afterend', btn);
+
+  inp.addEventListener('change', () => {
+    btn.style.display = (inp.files && inp.files.length > 0) ? 'inline-block' : 'none';
+  });
+
+  btn.onclick = () => {
+    inp.value = '';
+    document.querySelectorAll('audio').forEach(a => {
+      a.pause();
+      a.src = '/media/theme.mp3';
+      a.loop = true;
+      a.load();
+      a.play().catch(() => { if (window.unlockAudio) window.unlockAudio(); });
+    });
+    btn.style.display = 'none';
+  };
+})();
 </script>
 </body>
 </html>
