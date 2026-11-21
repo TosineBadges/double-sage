@@ -52,6 +52,33 @@ def build_hint(answer):
     return ', '.join(parts) if parts else f"{word_count} {'word' if word_count == 1 else 'words'}"
 
 
+def find_asset_file(filename):
+    if not filename or filename.endswith('.py'):
+        return None
+    base_name = os.path.basename(filename)
+    stem, ext = os.path.splitext(base_name)
+    alt_exts = [ext] if ext else []
+    if ext.lower() in ('.jpg', '.jpeg', '.png', '.webp'):
+        alt_exts = ['.jpg', '.jpeg', '.png', '.webp', '.JPG', '.JPEG', '.PNG']
+
+    search_dirs = ['.', 'static', 'media', 'images', 'assets', 'public']
+    for folder in search_dirs:
+        if not os.path.isdir(folder):
+            continue
+        try:
+            entries = os.listdir(folder)
+        except Exception:
+            continue
+        lower_map = {e.lower(): e for e in entries}
+        if base_name.lower() in lower_map:
+            return folder, lower_map[base_name.lower()]
+        for e_ext in alt_exts:
+            cand = (stem + e_ext).lower()
+            if cand in lower_map:
+                return folder, lower_map[cand]
+    return None
+
+
 @app.route('/')
 def index():
     return render_template_string(HTML_TEMPLATE)
@@ -61,17 +88,17 @@ def index():
 def serve_files(filename):
     if filename.endswith('.py'):
         return jsonify({'error': 'Forbidden'}), 403
-    for folder in ('.', 'media', 'static'):
-        if os.path.exists(os.path.join(folder, filename)):
-            return send_from_directory(folder, filename)
+    found = find_asset_file(filename)
+    if found:
+        return send_from_directory(found[0], found[1])
     return jsonify({'error': 'Not found'}), 404
 
 
 @app.route('/media/<path:filename>')
 def serve_media(filename):
-    for folder in ('.', 'media', 'static'):
-        if os.path.exists(os.path.join(folder, filename)):
-            return send_from_directory(folder, filename)
+    found = find_asset_file(filename)
+    if found:
+        return send_from_directory(found[0], found[1])
     return jsonify({'error': 'Media not found'}), 404
 
 
@@ -332,9 +359,9 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   .controls { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
   .pill {
     background: #1e293b; color: #e2e8f0; border: 1px solid #334155;
-    padding: 5px 10px; border-radius: 999px; font-size: 12px; cursor: pointer; font-weight: 600;
+    padding: 6px 11px; border-radius: 999px; font-size: 12px; cursor: pointer; font-weight: 700;
   }
-  .pill:active { transform: scale(0.97); }
+  .pill:active { transform: scale(0.96); }
   .container { max-width: 640px; margin: 14px auto; padding: 0 12px; }
   .card {
     background: var(--card); border: 1px solid #1e293b; border-radius: 16px;
@@ -356,7 +383,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   .btn-green { background: var(--green); color: #041f0e; }
   .btn-red { background: var(--red); color: #fff; }
   .btn-dark { background: #1e293b; color: #e2e8f0; border: 1px solid #334155; }
-  .btn-sm { width: auto; padding: 7px 12px; font-size: 12px; margin-top: 0; border-radius: 8px; }
+  .btn-sm { width: auto; padding: 8px 12px; font-size: 12px; margin-top: 0; border-radius: 8px; }
   .row { display: flex; gap: 8px; align-items: center; }
   .row > * { flex: 1; }
   .badge {
@@ -376,28 +403,33 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     background: #0f172a; padding: 8px; border-radius: 10px; margin-bottom: 10px;
   }
   .hidden { display: none !important; }
-  /* Intro Overlay: instant touch/click dismissal on entire screen + button */
   #introOverlay {
-    position: fixed; top: 0; left: 0; right: 0; bottom: 0; width: 100%; height: 100%;
-    background: #050811; z-index: 999999; cursor: pointer;
-    display: flex; flex-direction: column; align-items: center; justify-content: center;
-    padding: 20px; text-align: center; touch-action: manipulation;
+    position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+    background: radial-gradient(circle at center, #0f172a 0%, #050811 100%);
+    z-index: 99999; display: flex; flex-direction: column; align-items: center; justify-content: center;
+    padding: 20px; text-align: center; cursor: pointer;
   }
   #introSlideImg {
-    max-width: 92%; max-height: 60vh; border-radius: 18px; pointer-events: none;
-    box-shadow: 0 12px 40px rgba(56,189,248,0.35); object-fit: contain;
+    max-width: 90%; max-height: 56vh; border-radius: 18px; pointer-events: none;
+    box-shadow: 0 12px 40px rgba(56,189,248,0.4); object-fit: contain;
   }
-  #introTitle { margin-top: 14px; font-size: 22px; font-weight: 900; color: var(--gold); pointer-events: none; }
+  #introFallbackCrest {
+    width: 140px; height: 140px; border-radius: 28px; pointer-events: none;
+    background: linear-gradient(135deg, #0284c7, #facc15); color: #050811;
+    display: flex; align-items: center; justify-content: center; font-size: 56px; font-weight: 900;
+    box-shadow: 0 12px 35px rgba(250,204,21,0.35);
+  }
+  #introTitle { margin-top: 16px; font-size: 22px; font-weight: 900; color: var(--gold); pointer-events: none; }
   #introSub { color: #94a3b8; font-size: 13px; margin-top: 6px; pointer-events: none; }
   #skipIntroBtn {
-    position: fixed; top: 16px; right: 16px; z-index: 2147483647;
+    position: fixed; top: 18px; right: 18px; z-index: 2147483647;
     pointer-events: auto; cursor: pointer; background: var(--gold); color: #000;
-    border: 2px solid #fff; padding: 12px 20px; border-radius: 999px;
-    font-weight: 900; font-size: 15px; touch-action: manipulation;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.85);
+    border: 2px solid #fff; padding: 11px 20px; border-radius: 999px; font-weight: 900; font-size: 14px;
+    box-shadow: 0 4px 18px rgba(0,0,0,0.75);
   }
   .modal-bg {
-    position: fixed; inset: 0; background: rgba(0,0,0,0.8); z-index: 10000;
+    position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.82); z-index: 10000;
     display: flex; align-items: center; justify-content: center; padding: 16px;
   }
   .modal-box {
@@ -405,26 +437,13 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     max-width: 520px; width: 100%; max-height: 85vh; overflow-y: auto; padding: 18px;
   }
 </style>
-<script>
-function dismissIntroNow(e) {
-  if (e && e.preventDefault) e.preventDefault();
-  if (window._introTimer) { clearInterval(window._introTimer); window._introTimer = null; }
-  var ov = document.getElementById('introOverlay');
-  if (ov) {
-    ov.style.display = 'none';
-    if (ov.parentNode) ov.parentNode.removeChild(ov);
-  }
-  var btn = document.getElementById('skipIntroBtn');
-  if (btn && btn.parentNode) btn.parentNode.removeChild(btn);
-  try { if (typeof startThemeAudio === 'function') startThemeAudio(); } catch (err) {}
-}
-</script>
 </head>
 <body>
 
-<div id="introOverlay" onclick="dismissIntroNow(event)" ontouchend="dismissIntroNow(event)">
-  <button id="skipIntroBtn" type="button" onclick="dismissIntroNow(event)" ontouchend="dismissIntroNow(event)">Skip Intro ⏭</button>
-  <img id="introSlideImg" src="/double_sage_icon.jpg" alt="Double Sage" onerror="this.style.display='none'">
+<div id="introOverlay" onclick="dismissIntroNow(event)">
+  <button id="skipIntroBtn" type="button" onclick="dismissIntroNow(event)">Skip Intro ⏭</button>
+  <img id="introSlideImg" src="/double_sage_icon.jpg" alt="Double Sage" onerror="this.classList.add('hidden');document.getElementById('introFallbackCrest').classList.remove('hidden');">
+  <div id="introFallbackCrest" class="hidden">⚔️</div>
   <div id="introTitle">DOUBLE SAGE — BATTLE OF MINDS</div>
   <div id="introSub">Tap anywhere or press Skip Intro to enter immediately</div>
 </div>
@@ -470,7 +489,7 @@ function dismissIntroNow(e) {
           <input id="timerInput" type="number" value="30" min="10" max="120">
         </div>
       </div>
-      <button class="btn btn-primary" onclick="createRoom()">🚀 Create Room</button>
+      <button class="btn btn-primary" type="button" onclick="createRoom()">🚀 Create Room</button>
     </div>
 
     <div class="card">
@@ -485,7 +504,7 @@ function dismissIntroNow(e) {
           <input id="joinCodeInput" placeholder="ABCD" maxlength="4" style="text-transform:uppercase;">
         </div>
       </div>
-      <button class="btn btn-gold" onclick="joinRoom()">⚡ Join Room</button>
+      <button class="btn btn-gold" type="button" onclick="joinRoom()">⚡ Join Room</button>
     </div>
 
     <div class="card">
@@ -494,7 +513,7 @@ function dismissIntroNow(e) {
       <div id="creatorLinkDisplay" style="margin-bottom:8px;"></div>
       <div class="row">
         <input id="creatorUrlInput" placeholder="Paste Paystack / Selar / Flutterwave URL">
-        <button class="btn btn-dark btn-sm" onclick="saveCreatorUrl()">Save Link</button>
+        <button class="btn btn-dark btn-sm" type="button" onclick="saveCreatorUrl()">Save Link</button>
       </div>
     </div>
   </div>
@@ -507,7 +526,7 @@ function dismissIntroNow(e) {
           <span class="badge" id="roomModeBadge">MODE</span>
           <span class="badge" id="roundBadge">Round 1/5</span>
         </div>
-        <button class="pill" onclick="copyInviteLink()">📋 Copy Invite Link</button>
+        <button class="pill" type="button" onclick="copyInviteLink()">📋 Copy Invite Link</button>
       </div>
       <div id="scoreboardArea" style="margin-top:12px;"></div>
     </div>
@@ -515,7 +534,7 @@ function dismissIntroNow(e) {
     <div id="lobbyPhase" class="card hidden">
       <h3>⏳ Waiting for Players (Up to 10)</h3>
       <p style="font-size:13px;color:var(--muted);">Share the room code or invite link. The host starts the match once everyone is in.</p>
-      <button id="startMatchBtn" class="btn btn-green hidden" onclick="startMatch()">🔥 Start Match Now</button>
+      <button id="startMatchBtn" class="btn btn-green hidden" type="button" onclick="startMatch()">🔥 Start Match Now</button>
     </div>
 
     <div id="askingPhase" class="card hidden">
@@ -523,7 +542,7 @@ function dismissIntroNow(e) {
         <h3 id="askerTitle">✍️ Set Your Question & Secret Answer</h3>
         <div class="row" style="margin-bottom:6px;">
           <select id="qbQuickSelect"><option value="">-- Load from My QBs --</option></select>
-          <button class="btn btn-dark btn-sm" onclick="pickFromQB()">Load QB</button>
+          <button class="btn btn-dark btn-sm" type="button" onclick="pickFromQB()">Load QB</button>
         </div>
         <label>Question</label>
         <input id="liveQuestionInput" placeholder="e.g. Who is the president of Nigeria? or 20 * 5">
@@ -533,7 +552,7 @@ function dismissIntroNow(e) {
           <button class="btn btn-gold btn-sm" type="button" onclick="suggestAnswer('liveQuestionInput','liveAnswerInput','liveAiStatus')">✨ Suggest</button>
         </div>
         <div id="liveAiStatus" style="font-size:12px;color:var(--accent);margin-top:4px;"></div>
-        <button class="btn btn-primary" onclick="sendQuestion()">📤 Send Question to Players</button>
+        <button class="btn btn-primary" type="button" onclick="sendQuestion()">📤 Send Question to Players</button>
       </div>
       <div id="waitingAskerBox" class="hidden">
         <h3>⏳ Waiting for Question...</h3>
@@ -548,7 +567,7 @@ function dismissIntroNow(e) {
       <div id="guesserInputBox">
         <label>Your Guess</label>
         <input id="playerGuessInput" placeholder="Type your answer quickly...">
-        <button class="btn btn-green" onclick="submitGuess()">✅ Submit Answer</button>
+        <button class="btn btn-green" type="button" onclick="submitGuess()">✅ Submit Answer</button>
       </div>
       <div id="submittedWaitBox" class="hidden">
         <p style="color:var(--green);font-weight:700;">✔ Answer submitted! Waiting for remaining players...</p>
@@ -564,23 +583,23 @@ function dismissIntroNow(e) {
       <div id="submissionsList"></div>
 
       <div id="contestArea" class="hidden" style="margin-top:10px;">
-        <button id="contestBtn" class="btn btn-red hidden" onclick="contestRuling()">⚖️ Contest Ruling (I Was Right!)</button>
+        <button id="contestBtn" class="btn btn-red hidden" type="button" onclick="contestRuling()">⚖️ Contest Ruling (I Was Right!)</button>
         <div id="setterApprovalBox" class="hidden" style="background:#1e293b;padding:12px;border-radius:12px;margin-top:8px;">
           <div style="font-weight:800;color:var(--gold);margin-bottom:8px;">⚖️ Guesser Contested! Was their answer right?</div>
           <div class="row">
-            <button class="btn btn-green btn-sm" onclick="resolveContest(true)">✅ Accept Guesser (+5 Pts)</button>
-            <button class="btn btn-red btn-sm" onclick="resolveContest(false)">❌ Reject (Setter Keeps +5)</button>
+            <button class="btn btn-green btn-sm" type="button" onclick="resolveContest(true)">✅ Accept Guesser (+5 Pts)</button>
+            <button class="btn btn-red btn-sm" type="button" onclick="resolveContest(false)">❌ Reject (Setter Keeps +5)</button>
           </div>
         </div>
       </div>
 
-      <button id="nextRoundBtn" class="btn btn-primary hidden" onclick="nextRound()">➡️ Next Round</button>
+      <button id="nextRoundBtn" class="btn btn-primary hidden" type="button" onclick="nextRound()">➡️ Next Round</button>
     </div>
 
     <div id="gameoverPhase" class="card hidden">
       <h2 style="color:var(--gold);text-align:center;">🏆 MATCH COMPLETE!</h2>
       <div id="finalPodium"></div>
-      <button class="btn btn-primary" onclick="location.href='/'">🏠 Back to Home</button>
+      <button class="btn btn-primary" type="button" onclick="location.href='/'">🏠 Back to Home</button>
     </div>
   </div>
 </div>
@@ -589,9 +608,9 @@ function dismissIntroNow(e) {
   <div class="modal-box">
     <div style="display:flex;justify-content:space-between;align-items:center;">
       <h2 style="color:var(--gold);">📖 How to Play Double Sage</h2>
-      <button class="pill" onclick="document.getElementById('howToPlayModal').classList.add('hidden')">✕</button>
+      <button class="pill" type="button" onclick="document.getElementById('howToPlayModal').classList.add('hidden')">✕</button>
     </div>
-    <p style="font-size:14px;line-height:1.5;"><b>1. Standard Mode (Setter vs. Guesser):</b> Players take turns setting a secret question & answer. You get a smart hint showing word count, letter count, and digits (only when numbers are present). Match the answer before time runs out for <b>+5 pts</b>; miss and the Setter gets <b>+5 pts</b>. Think you were judged unfairly? Tap <b>⚖️ Contest</b> for Setter review!</p>
+    <p style="font-size:14px;line-height:1.5;"><b>1. Standard Mode (Setter vs. Guesser):</b> Players take turns setting a secret question and answer. You get a smart hint showing word count, letter count, and digits (only when numbers are present). Match the answer before time runs out for <b>+5 pts</b>; miss and the Setter gets <b>+5 pts</b>. Think you were judged unfairly? Tap <b>⚖️ Contest</b> for Setter review!</p>
     <p style="font-size:14px;line-height:1.5;"><b>2. Simultaneous Umpire Mode (1–10 Players):</b> The Umpire is the organizer (<b>0 points</b>) who sets the total rounds and asks <b>all players the exact same question at once</b>. Everyone who gets it right earns <b>+5 pts</b> with their speed recorded; if nobody gets it, <b>0 points</b> are awarded.</p>
     <p style="font-size:14px;line-height:1.5;"><b>3. Smart AI Helper & My QBs:</b> Tap <b>✨ Suggest</b> when writing questions to auto-solve math (like <code>20 * 5</code>) or pull factual answers (personal questions like <i>"What is my nickname?"</i> stay private). Save question sets in <b>📚 My QBs</b> or unlock Pro Packs!</p>
   </div>
@@ -601,7 +620,7 @@ function dismissIntroNow(e) {
   <div class="modal-box">
     <div style="display:flex;justify-content:space-between;align-items:center;">
       <h2 style="color:var(--accent);">📚 My QBs & Pro Packs</h2>
-      <button class="pill" onclick="document.getElementById('qbModal').classList.add('hidden')">✕</button>
+      <button class="pill" type="button" onclick="document.getElementById('qbModal').classList.add('hidden')">✕</button>
     </div>
 
     <label>Add Question to My QB</label>
@@ -611,15 +630,15 @@ function dismissIntroNow(e) {
       <button class="btn btn-gold btn-sm" type="button" onclick="suggestAnswer('qbQInput','qbAInput','qbAiStatus')">✨ Suggest</button>
     </div>
     <div id="qbAiStatus" style="font-size:12px;color:var(--accent);margin-top:4px;"></div>
-    <button class="btn btn-primary btn-sm" style="margin-top:8px;" onclick="addQBItem()">➕ Save to My QB</button>
+    <button class="btn btn-primary btn-sm" type="button" style="margin-top:8px;" onclick="addQBItem()">➕ Save to My QB</button>
 
     <label>🎟️ Unlock Pro QB Pack (e.g., NAIJA2026, FOOTYPRO, PARTYVIP, or DSPACK:...)</label>
     <div class="row">
       <input id="packCodeInput" placeholder="Enter pack code">
-      <button class="btn btn-green btn-sm" onclick="redeemPack()">Unlock</button>
+      <button class="btn btn-green btn-sm" type="button" onclick="redeemPack()">Unlock</button>
     </div>
     <div style="margin-top:8px;">
-      <button class="btn btn-dark btn-sm" onclick="exportSellablePack()">📤 Export My QB as Sellable DSPACK Code</button>
+      <button class="btn btn-dark btn-sm" type="button" onclick="exportSellablePack()">📤 Export My QB as Sellable DSPACK Code</button>
       <textarea id="exportedPackBox" class="hidden" rows="2" style="margin-top:6px;font-size:11px;" readonly></textarea>
     </div>
 
@@ -635,11 +654,26 @@ const INTRO_SLIDES = [
   { img: '/double_sage_tournament.jpg', title: 'CLIMB THE LEADERBOARD TO VICTORY' }
 ];
 let slideIdx = 0;
-window._introTimer = setInterval(function() {
+let slideInterval = null;
+
+function dismissIntroNow(e) {
+  if (e && e.stopPropagation) e.stopPropagation();
+  if (slideInterval) {
+    clearInterval(slideInterval);
+    slideInterval = null;
+  }
   const ov = document.getElementById('introOverlay');
-  if (!ov || ov.style.display === 'none') {
-    clearInterval(window._introTimer);
-    window._introTimer = null;
+  if (ov) {
+    ov.style.display = 'none';
+    ov.remove();
+  }
+  try { startThemeAudio(); } catch (err) {}
+}
+
+slideInterval = setInterval(() => {
+  const ov = document.getElementById('introOverlay');
+  if (!ov) {
+    clearInterval(slideInterval);
     return;
   }
   slideIdx++;
@@ -648,8 +682,13 @@ window._introTimer = setInterval(function() {
     return;
   }
   const imgEl = document.getElementById('introSlideImg');
+  const crestEl = document.getElementById('introFallbackCrest');
   const titleEl = document.getElementById('introTitle');
-  if (imgEl) { imgEl.style.display = 'inline-block'; imgEl.src = INTRO_SLIDES[slideIdx].img; }
+  if (imgEl) {
+    if (crestEl) crestEl.classList.add('hidden');
+    imgEl.classList.remove('hidden');
+    imgEl.src = INTRO_SLIDES[slideIdx].img;
+  }
   if (titleEl) titleEl.textContent = INTRO_SLIDES[slideIdx].title;
 }, 3000);
 
@@ -662,7 +701,7 @@ function startThemeAudio() {
   const bg = document.getElementById('bgMusic');
   if (bg) {
     bg.volume = parseFloat(document.getElementById('volSlider').value || 0.8);
-    bg.play().catch(function() { startSynthFallback(); });
+    bg.play().catch(() => startSynthFallback());
   }
 }
 
@@ -672,7 +711,7 @@ function startSynthFallback() {
     audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
     const notes = [261.63, 329.63, 392.00, 523.25, 392.00, 329.63];
     let step = 0;
-    synthTimer = setInterval(function() {
+    synthTimer = setInterval(() => {
       if (!musicEnabled) return;
       const osc = audioCtx.createOscillator();
       const gain = audioCtx.createGain();
@@ -712,7 +751,7 @@ function handleSongUpload(inp) {
   const bg = document.getElementById('bgMusic');
   bg.src = URL.createObjectURL(inp.files[0]);
   bg.loop = true;
-  if (musicEnabled) bg.play().catch(function() {});
+  if (musicEnabled) bg.play().catch(() => {});
   document.getElementById('resetThemeBtn').classList.remove('hidden');
 }
 
@@ -724,7 +763,7 @@ function resetDefaultTheme() {
   bg.src = '/theme.mp3';
   bg.loop = true;
   bg.load();
-  if (musicEnabled) bg.play().catch(function() { startSynthFallback(); });
+  if (musicEnabled) bg.play().catch(() => startSynthFallback());
   document.getElementById('resetThemeBtn').classList.add('hidden');
 }
 
@@ -852,7 +891,7 @@ function redeemPack() {
   const upper = raw.toUpperCase();
   const list = getQB();
   if (PRO_PACKS[upper]) {
-    PRO_PACKS[upper].forEach(function(item) { list.push(item); });
+    PRO_PACKS[upper].forEach(item => list.push(item));
     saveQB(list);
     alert('Unlocked ' + PRO_PACKS[upper].length + ' questions from ' + upper + '!');
     document.getElementById('packCodeInput').value = '';
@@ -862,7 +901,7 @@ function redeemPack() {
     try {
       const decoded = JSON.parse(atob(raw.slice(7)));
       if (Array.isArray(decoded)) {
-        decoded.forEach(function(item) { if (item.q && item.a) list.push({ q: item.q, a: item.a }); });
+        decoded.forEach(item => { if (item.q && item.a) list.push({ q: item.q, a: item.a }); });
         saveQB(list);
         alert('Imported ' + decoded.length + ' custom pack questions!');
         document.getElementById('packCodeInput').value = '';
@@ -887,7 +926,7 @@ function renderQB() {
   const sel = document.getElementById('qbQuickSelect');
   sel.innerHTML = '<option value="">-- Load from My QBs (' + list.length + ') --</option>';
   container.innerHTML = '';
-  list.forEach(function(item, i) {
+  list.forEach((item, i) => {
     const opt = document.createElement('option');
     opt.value = i;
     opt.textContent = item.q;
@@ -896,7 +935,7 @@ function renderQB() {
     const row = document.createElement('div');
     row.className = 'player-item';
     row.innerHTML = '<div style="font-size:13px;"><b>' + escapeHtml(item.q) + '</b><br><span style="color:var(--green);">Ans: ' + escapeHtml(item.a) + '</span></div>' +
-      '<button class="pill" onclick="deleteQBItem(' + i + ')">🗑</button>';
+      '<button class="pill" type="button" onclick="deleteQBItem(' + i + ')">🗑</button>';
     container.appendChild(row);
   });
 }
@@ -931,7 +970,7 @@ function openHowToPlay() {
 
 function escapeHtml(str) {
   return String(str || '').replace(/[&<>"']/g, function(m) {
-    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m];
+    return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[m];
   });
 }
 
@@ -975,7 +1014,7 @@ function enterRoom(room, pid) {
   renderQB();
   renderRoom(room);
   if (pollTimer) clearInterval(pollTimer);
-  pollTimer = setInterval(async function() {
+  pollTimer = setInterval(async () => {
     try {
       const r = await fetch('/api/state/' + currentCode);
       const data = await r.json();
@@ -1037,7 +1076,7 @@ async function nextRound() {
 }
 
 function renderRoom(room) {
-  const me = room.players.find(function(p) { return p.id === myPlayerId; });
+  const me = room.players.find(p => p.id === myPlayerId);
   if (!me) {
     alert('You were removed from the room.');
     location.href = '/';
@@ -1050,17 +1089,17 @@ function renderRoom(room) {
 
   const sb = document.getElementById('scoreboardArea');
   sb.innerHTML = '';
-  room.players.forEach(function(p) {
+  room.players.forEach(p => {
     const div = document.createElement('div');
     div.className = 'player-item';
     const roleTag = p.is_umpire ? '<span class="badge" style="color:var(--gold);">🎙 Umpire (Organizer)</span>' :
       '<span style="font-weight:900;color:var(--green);">' + p.score + ' pts</span> <span style="font-size:11px;color:var(--muted);">(' + p.total_time + 's)</span>';
-    const kickBtn = (isHost && p.id !== myPlayerId) ? ' <button class="pill" onclick="kickPlayer(\'' + p.id + '\')">Kick</button>' : '';
+    const kickBtn = (isHost && p.id !== myPlayerId) ? ' <button class="pill" type="button" onclick="kickPlayer(\'' + p.id + '\')">Kick</button>' : '';
     div.innerHTML = '<div><b>' + escapeHtml(p.name) + '</b>' + (p.id === myPlayerId ? ' (You)' : '') + '</div><div>' + roleTag + kickBtn + '</div>';
     sb.appendChild(div);
   });
 
-  ['lobbyPhase', 'askingPhase', 'answeringPhase', 'reviewPhase', 'gameoverPhase'].forEach(function(id) {
+  ['lobbyPhase', 'askingPhase', 'answeringPhase', 'reviewPhase', 'gameoverPhase'].forEach(id => {
     document.getElementById(id).classList.add('hidden');
   });
 
@@ -1109,7 +1148,7 @@ function renderRoom(room) {
     if (!subs.length) {
       subList.innerHTML = '<p style="color:var(--muted);">No answers submitted before time expired (0 pts awarded).</p>';
     } else {
-      subs.forEach(function(s) {
+      subs.forEach(s => {
         const badge = s.correct
           ? '<span style="color:var(--green);font-weight:800;">✅ +5 pts (' + s.time + 's)</span>'
           : '<span style="color:var(--red);font-weight:800;">❌ 0 pts (' + s.time + 's)</span>';
@@ -1131,19 +1170,17 @@ function renderRoom(room) {
     document.getElementById('nextRoundBtn').classList.toggle('hidden', !isHost || room.contest_pending);
   } else if (room.phase === 'gameover') {
     document.getElementById('gameoverPhase').classList.remove('hidden');
-    const ranked = room.players.filter(function(p) { return !p.is_umpire; }).sort(function(a, b) {
-      return (b.score - a.score) || (a.total_time - b.total_time);
-    });
+    const ranked = room.players.filter(p => !p.is_umpire).sort((a, b) => (b.score - a.score) || (a.total_time - b.total_time));
     const pod = document.getElementById('finalPodium');
     pod.innerHTML = '';
-    ranked.forEach(function(p, idx) {
+    ranked.forEach((p, idx) => {
       const medal = idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : '#' + (idx + 1);
       pod.innerHTML += '<div class="player-item"><div><b>' + medal + ' ' + escapeHtml(p.name) + '</b></div><div><b style="color:var(--gold);">' + p.score + ' pts</b> (' + p.total_time + 's)</div></div>';
     });
   }
 }
 
-window.addEventListener('DOMContentLoaded', function() {
+window.addEventListener('DOMContentLoaded', () => {
   renderCreatorUrl();
   const params = new URLSearchParams(location.search);
   const code = params.get('room');
