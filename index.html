@@ -1,25 +1,25 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
 <title>Double Sage — Mind Duel (Pass & Play)</title>
 <style>
   :root {
     --bg: #070b14;
-    --card: #111827;
-    --card2: #1e293b;
-    --accent: #f59e0b;
-    --accent2: #3b82f6;
-    --success: #10b981;
-    --danger: #ef4444;
+    --card: #0f172a;
+    --card-2: #1e293b;
+    --accent: #38bdf8;
+    --accent-2: #f59e0b;
+    --green: #22c55e;
+    --red: #ef4444;
     --text: #f8fafc;
     --muted: #94a3b8;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui, -apple-system, sans-serif; }
   body { background: var(--bg); color: var(--text); min-height: 100vh; padding-bottom: 40px; }
-  
-  /* Bulletproof Intro Splash Overlay */
+
+  /* Bulletproof 4-Slide Intro Overlay */
   #introOverlay {
     position: fixed;
     inset: 0;
@@ -32,169 +32,141 @@
     padding: 20px;
     text-align: center;
   }
-  #introOverlay img {
-    max-width: 92%;
-    max-height: 56vh;
-    border-radius: 16px;
-    box-shadow: 0 12px 40px rgba(0,0,0,0.8);
-    border: 2px solid var(--accent);
+  #introSlideImg {
+    max-width: 92vw;
+    max-height: 58vh;
+    border-radius: 18px;
+    box-shadow: 0 12px 40px rgba(56, 189, 248, 0.35);
     object-fit: contain;
     margin-bottom: 16px;
+    border: 2px solid #1e293b;
   }
-  .intro-bar-wrap {
-    width: 260px;
-    height: 6px;
-    background: #1e293b;
-    border-radius: 999px;
-    overflow: hidden;
-    margin: 10px auto 18px;
-  }
-  #introProgress {
-    height: 100%;
-    width: 0%;
-    background: linear-gradient(90deg, var(--accent), var(--accent2));
-    transition: width 0.1s linear;
-  }
-  .intro-controls {
-    display: flex;
-    gap: 12px;
-    flex-wrap: wrap;
-    justify-content: center;
-    position: relative;
-    z-index: 99999;
-  }
-  #introOverlay button {
+  #introCaption { font-size: 15px; font-weight: 700; color: var(--accent); letter-spacing: 1px; margin-bottom: 10px; }
+  .intro-bar-wrap { width: 240px; height: 6px; background: #1e293b; border-radius: 999px; overflow: hidden; margin-bottom: 18px; }
+  #introBar { width: 0%; height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent-2)); transition: width 0.2s linear; }
+  .intro-btns { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; position: relative; z-index: 99999; }
+  .intro-btns button {
     position: relative;
     z-index: 99999 !important;
     pointer-events: auto !important;
     cursor: pointer;
     padding: 12px 20px;
-    border-radius: 10px;
-    border: none;
+    border-radius: 999px;
     font-weight: 800;
-    font-size: 0.95rem;
+    font-size: 14px;
+    border: none;
   }
+  .btn-sound-intro { background: var(--green); color: #052e16; }
+  .btn-skip-intro { background: #1e293b; color: #f8fafc; border: 1px solid #475569 !important; }
 
-  /* Top Bar */
+  /* Sticky Top Audio & QB Bar */
   .topbar {
     position: sticky;
     top: 0;
-    z-index: 500;
-    background: rgba(15, 23, 42, 0.96);
+    z-index: 100;
+    background: rgba(15, 23, 42, 0.95);
     backdrop-filter: blur(8px);
     border-bottom: 1px solid #1e293b;
     padding: 10px 14px;
     display: flex;
     flex-wrap: wrap;
+    gap: 8px;
     align-items: center;
     justify-content: space-between;
-    gap: 8px;
   }
-  .brand { display: flex; align-items: center; gap: 8px; font-weight: 900; font-size: 1.1rem; color: var(--accent); }
-  .brand img { width: 32px; height: 32px; border-radius: 8px; object-fit: cover; border: 1px solid var(--accent); }
-  .audio-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
-  .pill-btn {
-    background: var(--card2);
-    color: var(--text);
+  .brand { font-weight: 900; font-size: 16px; letter-spacing: 1px; color: var(--accent); }
+  .top-controls { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  .pill {
+    background: #1e293b;
+    color: #f8fafc;
     border: 1px solid #334155;
     padding: 6px 10px;
-    border-radius: 8px;
-    font-size: 0.78rem;
+    border-radius: 999px;
+    font-size: 12px;
     font-weight: 700;
     cursor: pointer;
   }
-  .pill-btn:hover { border-color: var(--accent); }
-  .pill-btn.active { background: rgba(245, 158, 11, 0.18); border-color: var(--accent); color: var(--accent); }
-  input[type="range"] { width: 65px; accent-color: var(--accent); cursor: pointer; }
+  .pill.active { border-color: var(--accent); color: var(--accent); }
+  input[type="range"] { width: 70px; accent-color: var(--accent); }
 
-  /* Container & Cards */
-  .container { max-width: 680px; margin: 18px auto; padding: 0 14px; }
+  .container { max-width: 680px; margin: 16px auto; padding: 0 14px; }
   .card {
     background: var(--card);
     border: 1px solid #1e293b;
     border-radius: 16px;
     padding: 18px;
     margin-bottom: 16px;
-    box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.35);
   }
-  h2 { font-size: 1.15rem; margin-bottom: 12px; color: var(--accent); display: flex; align-items: center; gap: 8px; }
-  label { display: block; font-size: 0.82rem; color: var(--muted); margin-bottom: 5px; font-weight: 600; }
+  h2 { font-size: 18px; margin-bottom: 12px; color: var(--accent); }
+  h3 { font-size: 15px; margin-bottom: 8px; color: var(--accent-2); }
+  label { display: block; font-size: 12px; color: var(--muted); margin: 10px 0 4px; font-weight: 600; }
   input[type="text"], input[type="number"], select, textarea {
     width: 100%;
-    background: #0f172a;
+    background: #070b14;
+    color: #f8fafc;
     border: 1px solid #334155;
-    color: var(--text);
-    padding: 11px 12px;
     border-radius: 10px;
-    font-size: 0.95rem;
-    margin-bottom: 12px;
+    padding: 11px 12px;
+    font-size: 15px;
   }
-  input:focus, select:focus, textarea:focus { outline: none; border-color: var(--accent); }
-  .row { display: flex; gap: 10px; flex-wrap: wrap; }
-  .col { flex: 1; min-width: 130px; }
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
   .btn {
     width: 100%;
     padding: 13px;
-    border: none;
     border-radius: 12px;
+    border: none;
     font-weight: 800;
-    font-size: 1rem;
+    font-size: 15px;
     cursor: pointer;
-    transition: transform 0.1s;
+    margin-top: 12px;
   }
-  .btn:active { transform: scale(0.98); }
-  .btn-primary { background: linear-gradient(135deg, #f59e0b, #d97706); color: #000; }
-  .btn-blue { background: linear-gradient(135deg, #3b82f6, #2563eb); color: #fff; }
-  .btn-success { background: linear-gradient(135deg, #10b981, #059669); color: #fff; }
-  .btn-danger { background: linear-gradient(135deg, #ef4444, #dc2626); color: #fff; }
-  .btn-sec { background: var(--card2); color: var(--text); border: 1px solid #334155; }
-
-  /* Hero Gallery */
-  .hero-banner { width: 100%; max-height: 180px; object-fit: cover; border-radius: 12px; margin-bottom: 10px; border: 1px solid #334155; }
-  .hero-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px; }
-  .hero-grid img { width: 100%; height: 110px; object-fit: cover; border-radius: 10px; border: 1px solid #334155; }
-
-  /* Game UI */
+  .btn-primary { background: linear-gradient(135deg, var(--accent), #0284c7); color: #04131c; }
+  .btn-gold { background: linear-gradient(135deg, var(--accent-2), #d97706); color: #1c1002; }
+  .btn-green { background: var(--green); color: #052e16; }
+  .btn-red { background: var(--red); color: #fff; }
+  .btn-dark { background: #1e293b; color: #f8fafc; border: 1px solid #334155; }
   .hidden { display: none !important; }
-  .badge { display: inline-block; padding: 4px 10px; border-radius: 999px; font-size: 0.75rem; font-weight: 800; background: rgba(59, 130, 246, 0.2); color: #60a5fa; }
-  .timer-box {
-    font-size: 2.4rem;
-    font-weight: 900;
-    text-align: center;
-    padding: 14px;
-    border-radius: 14px;
-    background: #0f172a;
-    border: 2px solid var(--accent2);
-    margin: 12px 0;
-  }
-  .timer-urgent { border-color: var(--danger); color: var(--danger); animation: pulse 0.6s infinite alternate; }
-  @keyframes pulse { from { transform: scale(1); } to { transform: scale(1.03); } }
+
+  .banner-strip { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 14px; }
+  .banner-strip img { width: 100%; height: 74px; object-fit: cover; border-radius: 10px; border: 1px solid #334155; }
+
   .hint-box {
     background: rgba(245, 158, 11, 0.15);
-    border: 1px solid var(--accent);
-    color: #fcd34d;
-    padding: 10px 12px;
+    border: 1px solid var(--accent-2);
+    color: #fde68a;
+    padding: 10px;
     border-radius: 10px;
-    font-size: 0.88rem;
+    font-size: 13px;
     font-weight: 700;
-    margin-bottom: 12px;
+    margin: 10px 0;
   }
+  .timer-circle {
+    font-size: 36px;
+    font-weight: 900;
+    text-align: center;
+    color: var(--accent);
+    margin: 10px 0;
+  }
+  .timer-circle.danger { color: var(--red); }
+
   .leader-row {
     display: flex;
     justify-content: space-between;
-    align-items: center;
     padding: 10px 12px;
-    background: #0f172a;
+    background: #070b14;
     border-radius: 10px;
-    margin-bottom: 8px;
+    margin-bottom: 6px;
     border: 1px solid #1e293b;
+    font-weight: 700;
   }
-  /* Modal */
+
+  /* Modal for My QB's & Pro Packs */
   .modal-bg {
     position: fixed;
     inset: 0;
-    background: rgba(0,0,0,0.82);
-    z-index: 2000;
+    background: rgba(0,0,0,0.8);
+    z-index: 500;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -204,196 +176,182 @@
     background: var(--card);
     border: 1px solid #334155;
     border-radius: 16px;
-    max-width: 520px;
+    max-width: 540px;
     width: 100%;
     max-height: 85vh;
     overflow-y: auto;
     padding: 18px;
   }
   .qb-item {
-    background: #0f172a;
-    border: 1px solid #334155;
+    background: #070b14;
+    border: 1px solid #1e293b;
     padding: 10px;
     border-radius: 10px;
-    margin-bottom: 8px;
+    margin-top: 8px;
     display: flex;
     justify-content: space-between;
     align-items: center;
     gap: 8px;
   }
+  .creator-box {
+    background: linear-gradient(135deg, rgba(56,189,248,0.12), rgba(245,158,11,0.12));
+    border: 1px solid #334155;
+    border-radius: 12px;
+    padding: 12px;
+    margin-top: 10px;
+  }
 </style>
 </head>
 <body>
 
-<!-- 4-Slide 3s Intro Overlay -->
+<!-- 4-Slide 3-Second Intro Splash -->
 <div id="introOverlay">
-  <div style="font-size:0.85rem;font-weight:800;color:var(--accent);letter-spacing:1.5px;margin-bottom:8px;" id="introLabel">1 / 4 — DOUBLE SAGE</div>
-  <img id="introImg" src="" alt="Double Sage">
-  <div class="intro-bar-wrap"><div id="introProgress"></div></div>
-  <div class="intro-controls">
-    <button type="button" style="background:linear-gradient(135deg,#f59e0b,#d97706);color:#000;" onclick="unlockAudio(true)">🔊 Enable Loud Sound</button>
-    <button type="button" style="background:#1e293b;color:#fff;border:1px solid #475569;" onclick="forceCloseIntro()">Skip Intro ⏭</button>
+  <img id="introSlideImg" src="double_sage_icon.jpg" alt="Double Sage" onerror="this.style.display='none'" />
+  <div id="introCaption">1 / 4 — DOUBLE SAGE</div>
+  <div class="intro-bar-wrap"><div id="introBar"></div></div>
+  <div class="intro-btns">
+    <button type="button" class="btn-sound-intro" onclick="unlockAudio(); playSfx('chime');">🔊 Enable Loud Sound</button>
+    <button type="button" class="btn-skip-intro" onclick="forceCloseIntro()">Skip Intro ⏭</button>
   </div>
 </div>
 
 <!-- Sticky Top Bar -->
 <div class="topbar">
-  <div class="brand">
-    <img id="navIcon" src="" alt="" onerror="this.style.display='none'">
-    <span>DOUBLE SAGE</span>
-  </div>
-  <div class="audio-bar">
-    <button type="button" class="pill-btn" onclick="replayIntro()">🎬 Intro</button>
-    <button type="button" class="pill-btn" onclick="openQbModal()">📚 My QB's</button>
-    <button type="button" id="musicBtn" class="pill-btn active" onclick="toggleMusic()">🎵 Music: ON</button>
-    <button type="button" id="sfxBtn" class="pill-btn active" onclick="toggleSfx()">🔊 SFX: ON</button>
-    <input type="range" id="volSlider" min="0" max="1" step="0.05" value="0.9" title="Volume" oninput="setVolume(this.value)">
-    <label class="pill-btn" style="margin:0;cursor:pointer;">
+  <div class="brand">DOUBLE SAGE</div>
+  <div class="top-controls">
+    <button type="button" class="pill" onclick="replayIntro()">🎬 Intro</button>
+    <button type="button" class="pill" onclick="openQbModal()">📚 My QB's</button>
+    <button type="button" id="musicBtn" class="pill active" onclick="toggleMusic()">🎵 Music: ON</button>
+    <button type="button" id="sfxBtn" class="pill active" onclick="toggleSfx()">🔊 SFX: ON</button>
+    <input type="range" id="volSlider" min="0" max="1" step="0.05" value="0.9" onchange="setVolume(this.value)" title="Volume" />
+    <label class="pill" style="margin:0;">
       📂 Load Song
-      <input type="file" id="songPicker" accept="audio/*" style="display:none" onchange="loadLocalSong(event)">
+      <input type="file" id="songPicker" accept="audio/*" style="display:none;" onchange="loadCustomSong(this)" />
     </label>
-    <button type="button" id="resetThemeBtn" class="pill-btn hidden" onclick="resetToThemeSong()">🔄 Default Theme</button>
+    <button type="button" id="resetThemeBtn" class="pill hidden" style="border-color:var(--accent);color:var(--accent);" onclick="resetToDefaultTheme()">🔄 Default Theme</button>
   </div>
 </div>
 
+<audio id="bgAudio" src="theme.mp3" loop preload="auto"></audio>
+
 <div class="container">
-  <!-- Setup View -->
-  <div id="setupView">
-    <div class="card" style="padding:12px;">
-      <img id="heroBanner" class="hero-banner" src="" alt="Double Sage Banner" onerror="this.style.display='none'">
-      <div class="hero-grid">
-        <img id="heroBattle" src="" alt="1v1 Battle" onerror="this.style.display='none'">
-        <img id="heroTourney" src="" alt="Tournament" onerror="this.style.display='none'">
-      </div>
-      <div style="text-align:center;font-size:0.85rem;color:var(--muted);">Same-Phone Pass &amp; Play Edition • +5 Pts per Correct Answer</div>
+  <!-- Setup Screen -->
+  <div id="setupScreen" class="card">
+    <div class="banner-strip">
+      <img src="double_sage_battle.jpg" alt="Battle" onerror="this.style.display='none'" />
+      <img src="double_sage_banner.jpg" alt="Banner" onerror="this.style.display='none'" />
+      <img src="double_sage_tournament.jpg" alt="Tournament" onerror="this.style.display='none'" />
     </div>
+    <h2>🎮 Pass & Play Setup (Same Device)</h2>
+    <div class="row">
+      <div>
+        <label>Players (2–10)</label>
+        <input type="number" id="playerCount" min="2" max="10" value="3" onchange="renderNameInputs()" />
+      </div>
+      <div>
+        <label>Questions Per Player</label>
+        <input type="number" id="qPerPlayer" min="1" max="10" value="2" />
+      </div>
+    </div>
+    <div class="row">
+      <div>
+        <label>Answer Timer (10–60s)</label>
+        <input type="number" id="timerSec" min="10" max="60" value="25" />
+      </div>
+      <div style="display:flex;align-items:flex-end;">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;color:#f8fafc;margin-bottom:8px;">
+          <input type="checkbox" id="umpireMode" onchange="toggleUmpireInput()" style="width:18px;height:18px;" />
+          ⚖ Umpire Mode
+        </label>
+      </div>
+    </div>
+    <div id="umpireNameWrap" class="hidden">
+      <label>Umpire / Organizer Name (Sets all questions; rulings final)</label>
+      <input type="text" id="umpireName" placeholder="e.g., Chief Referee" />
+    </div>
+    <div id="playerNamesWrap"></div>
+    <button type="button" class="btn btn-primary" onclick="startMatch()">🚀 Start Match</button>
 
-    <div class="card">
-      <h2>🎮 Match Setup</h2>
+    <!-- Creator Tournament & Support Hub -->
+    <div class="creator-box">
+      <h3>🏆 Live Tournaments & Creator Hub</h3>
+      <p style="font-size:12px;color:var(--muted);margin-bottom:8px;">Join weekend cash tournaments, unlock Pro QB Packs, or support the creator!</p>
       <div class="row">
-        <div class="col">
-          <label>Number of Players (2–10)</label>
-          <input type="number" id="numPlayers" min="2" max="10" value="2" onchange="renderNameInputs()">
-        </div>
-        <div class="col">
-          <label>Questions per Player</label>
-          <input type="number" id="qPerPlayer" min="1" max="15" value="2">
-        </div>
-        <div class="col">
-          <label>Timer (10–60 sec)</label>
-          <input type="number" id="turnTimer" min="10" max="60" value="25">
-        </div>
+        <button type="button" class="btn btn-gold" style="margin-top:0;font-size:13px;" onclick="openPaymentLink()">🎟️ Tournament Ticket / Tip</button>
+        <button type="button" class="btn btn-dark" style="margin-top:0;font-size:13px;" onclick="openQbModal()">🔓 Unlock Pro QB Pack</button>
       </div>
-
-      <label style="display:flex;align-items:center;gap:8px;margin:8px 0 14px;cursor:pointer;color:var(--text);">
-        <input type="checkbox" id="umpireMode" style="width:18px;height:18px;" onchange="renderNameInputs()">
-        <span>⚖ <strong>Umpire Mode:</strong> Player 1 is the Organizer/Umpire (sets all questions; ruling is final)</span>
-      </label>
-
-      <div id="playerNamesBox"></div>
-
-      <button type="button" class="btn btn-primary" onclick="startMatch()">🚀 Start Match</button>
+      <div style="margin-top:8px;display:flex;gap:6px;">
+        <input type="text" id="creatorPayLink" placeholder="Paste Paystack / Selar / Flutterwave link..." style="font-size:12px;padding:7px;" />
+        <button type="button" class="pill" onclick="saveCreatorLink()">Save Link</button>
+      </div>
     </div>
   </div>
 
-  <!-- Pass Device Privacy Gate -->
-  <div id="passView" class="card hidden" style="text-align:center;padding:28px 18px;">
-    <span class="badge" id="passRoleBadge">PRIVACY SCREEN</span>
-    <h2 style="justify-content:center;font-size:1.45rem;margin-top:12px;" id="passTitle">Pass Phone to Player 1</h2>
-    <p style="color:var(--muted);margin-bottom:20px;" id="passSubtitle">Make sure nobody else is peeking at the screen!</p>
-    <button type="button" class="btn btn-primary" onclick="revealTurnScreen()">👀 I Have the Phone — Ready</button>
-  </div>
-
-  <!-- Asker / Umpire Set Question View -->
-  <div id="askView" class="card hidden">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
-      <span class="badge" id="askRoundBadge">ROUND 1</span>
-      <span style="font-size:0.85rem;color:var(--muted);" id="askMatchupText">Asker → Guesser</span>
-    </div>
-    <h2 id="askHeader">✍️ Set Your Question</h2>
+  <!-- Set Question Screen -->
+  <div id="askScreen" class="card hidden">
+    <h2 id="askHeader">Set Your Question</h2>
+    <p id="askSub" style="font-size:13px;color:var(--muted);margin-bottom:10px;"></p>
 
     <label>Pick Starter Prompt or Saved QB (Editable)</label>
-    <div class="row" style="margin-bottom:8px;">
-      <select id="promptSelect" style="margin-bottom:0;flex:1;" onchange="applyPromptSelection()">
-        <option value="">-- Choose Starter Prompt or My QB --</option>
-      </select>
-      <button type="button" class="pill-btn" style="padding:10px 12px;" onclick="loadNextUnusedQb()">⚡ Next QB</button>
+    <div style="display:flex;gap:6px;">
+      <select id="promptSelect" onchange="applySelectedPrompt()"></select>
+      <button type="button" class="pill" style="white-space:nowrap;" onclick="nextQbPrompt()">⚡ Next QB</button>
     </div>
 
-    <label>Question</label>
-    <textarea id="qInput" rows="2" placeholder="Type or edit your question..."></textarea>
+    <label>Question (Guesser will see this)</label>
+    <textarea id="qInput" rows="2" placeholder="Type your riddle or trivia question..."></textarea>
 
-    <label>Secret Answer</label>
-    <input type="text" id="aInput" placeholder="Type the exact answer...">
+    <label>Secret Answer (Hidden during countdown)</label>
+    <input type="text" id="aInput" placeholder="Exact answer..." />
 
     <div class="row">
-      <div class="col">
-        <button type="button" class="btn btn-sec" onclick="saveCurrentToQb()">💾 Save to My QB's</button>
-      </div>
-      <div class="col">
-        <button type="button" class="btn btn-primary" onclick="lockQuestion()">🔒 Lock &amp; Pass to Guesser</button>
-      </div>
+      <button type="button" class="btn btn-dark" onclick="saveCurrentToQb()">💾 Save to My QB's</button>
+      <button type="button" class="btn btn-primary" onclick="lockQuestion()">🔒 Lock & Pass Device</button>
     </div>
   </div>
 
-  <!-- Guesser Answer View -->
-  <div id="guessView" class="card hidden">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-      <span class="badge" id="guessTurnBadge">GUESSER'S TURN</span>
-      <span style="font-size:0.85rem;color:var(--muted);" id="guessMatchupText"></span>
-    </div>
-    <h2 id="guessQuestionText" style="color:var(--text);font-size:1.25rem;line-height:1.4;"></h2>
+  <!-- Handoff Screen -->
+  <div id="handoffScreen" class="card hidden" style="text-align:center;">
+    <h2>📱 Pass the Phone!</h2>
+    <p id="handoffText" style="font-size:16px;margin:14px 0;font-weight:700;"></p>
+    <button type="button" class="btn btn-green" onclick="beginGuessTurn()">👀 I'm Ready — Show Question</button>
+  </div>
 
+  <!-- Guess Screen -->
+  <div id="guessScreen" class="card hidden">
+    <h2 id="guessHeader">Your Turn to Answer</h2>
+    <div id="displayQuestion" style="font-size:18px;font-weight:800;margin:12px 0;line-height:1.4;"></div>
     <div id="digitHintBox" class="hint-box hidden">🔢 Manager Hint: The secret answer contains numbers/digits!</div>
-
-    <div id="countdownDisplay" class="timer-box">25s</div>
-
+    <div id="timerDisplay" class="timer-circle">25s</div>
     <label>Your Answer</label>
-    <input type="text" id="guessInput" placeholder="Type your guess before time runs out..." onkeydown="if(event.key==='Enter')submitGuess()">
-
-    <button type="button" class="btn btn-success" onclick="submitGuess()">✅ Submit Answer</button>
+    <input type="text" id="guessInput" placeholder="Type your answer quickly..." />
+    <button type="button" class="btn btn-primary" onclick="submitGuess(false)">✅ Submit Answer</button>
   </div>
 
-  <!-- Review / Ruling View -->
-  <div id="reviewView" class="card hidden">
-    <span class="badge">RULING TIME</span>
-    <h2 style="margin-top:8px;" id="reviewHeader">⚖ Judge the Answer</h2>
-    <div style="background:#0f172a;padding:12px;border-radius:12px;margin-bottom:14px;line-height:1.6;">
-      <div><strong style="color:var(--muted);">Question:</strong> <span id="revQ"></span></div>
-      <div><strong style="color:var(--accent);">Secret Answer:</strong> <span id="revSecret"></span></div>
-      <div><strong style="color:#60a5fa;">Guesser's Reply:</strong> <span id="revGuess"></span> <span style="font-size:0.8rem;color:var(--muted);" id="revTime"></span></div>
-    </div>
-
+  <!-- Review Screen -->
+  <div id="reviewScreen" class="card hidden">
+    <h2 id="reviewHeader">Review Answer</h2>
+    <p style="margin:8px 0;"><strong>Question:</strong> <span id="revQ"></span></p>
+    <p style="margin:8px 0;color:var(--green);"><strong>Secret Answer:</strong> <span id="revSecret"></span></p>
+    <p style="margin:8px 0;color:var(--accent);"><strong>Guesser's Reply:</strong> <span id="revGuess"></span></p>
     <div class="row">
-      <div class="col">
-        <button type="button" class="btn btn-success" onclick="ruleAnswer(true)">✅ Correct (+5 Pts)</button>
-      </div>
-      <div class="col">
-        <button type="button" class="btn btn-danger" onclick="ruleAnswer(false)">❌ Wrong (0 Pts)</button>
-      </div>
+      <button type="button" class="btn btn-green" onclick="ruleAnswer(true)">✅ Correct (+5 Pts)</button>
+      <button type="button" class="btn btn-red" onclick="ruleAnswer(false)">❌ Wrong (0 Pts)</button>
     </div>
   </div>
 
-  <!-- Round Result & Contest View -->
-  <div id="resultView" class="card hidden">
-    <h2 id="resBanner">Result</h2>
-    <p id="resDetail" style="color:var(--muted);margin-bottom:14px;"></p>
+  <!-- Result & Contest Screen -->
+  <div id="resultScreen" class="card hidden">
+    <h2 id="resTitle">Round Result</h2>
+    <p id="resDetail" style="margin:10px 0;font-size:15px;"></p>
 
-    <!-- Standard Mode Contest Button -->
-    <div id="contestPromptBox" class="hidden" style="margin-bottom:14px;">
-      <button type="button" class="btn btn-danger" onclick="triggerContest()">⚠ CONTEST ANSWER (Dispute Result)</button>
-    </div>
+    <button type="button" id="contestBtn" class="btn btn-gold hidden" onclick="triggerContest()">⚠ CONTEST ANSWER (Dispute Result)</button>
 
-    <!-- Asker Approval Box after Contest -->
-    <div id="contestApprovalBox" class="hidden" style="background:rgba(239,68,68,0.12);border:1px solid var(--danger);padding:14px;border-radius:12px;margin-bottom:14px;">
-      <div style="font-weight:800;color:#fca5a5;margin-bottom:8px;">⚖ Guesser Contested! Asker Must Decide:</div>
+    <div id="contestResolveBox" class="hidden" style="margin-top:12px;padding:12px;background:#070b14;border-radius:12px;border:1px solid var(--accent-2);">
+      <p style="font-weight:700;color:var(--accent-2);margin-bottom:8px;">Guesser Contested! Questioner Must Choose:</p>
       <div class="row">
-        <div class="col">
-          <button type="button" class="btn btn-success" onclick="resolveContest('accept')">✅ Accept Guess (+5 Pts)</button>
-        </div>
-        <div class="col">
-          <button type="button" class="btn btn-blue" onclick="resolveContest('reask')">🔄 Send New Question (0 Pts)</button>
-        </div>
+        <button type="button" class="btn btn-green" style="margin-top:0;" onclick="resolveContest(true)">✅ Accept Guess (+5 Pts)</button>
+        <button type="button" class="btn btn-red" style="margin-top:0;" onclick="resolveContest(false)">🔄 Send New Question (0 Pts)</button>
       </div>
     </div>
 
@@ -404,190 +362,142 @@
   <div id="leaderboardCard" class="card hidden">
     <h2>🏆 Live Leaderboard</h2>
     <div id="leaderboardList"></div>
-    <button type="button" id="newMatchBtn" class="btn btn-sec hidden" style="margin-top:12px;" onclick="resetToSetup()">🔁 Play Again</button>
+    <button type="button" id="playAgainBtn" class="btn btn-gold hidden" onclick="location.reload()">🔁 Play New Match</button>
   </div>
 </div>
 
-<!-- My QB's Modal -->
+<!-- My QB's & Pro Pack Modal -->
 <div id="qbModal" class="modal-bg hidden">
   <div class="modal-card">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
-      <h2 style="margin:0;">📚 My QB's (Question Banks)</h2>
-      <button type="button" class="pill-btn" onclick="closeQbModal()">✖</button>
+      <h2 style="margin:0;">📚 My QB's & Pro Packs</h2>
+      <button type="button" class="pill" onclick="closeQbModal()">✖</button>
     </div>
-    <p style="font-size:0.82rem;color:var(--muted);margin-bottom:12px;">Saved permanently on this device for instant one-tap loading during your turn.</p>
-    
-    <label>New Question</label>
-    <input type="text" id="qbNewQ" placeholder="e.g. Which planet has the most moons?">
-    <label>Secret Answer</label>
-    <input type="text" id="qbNewA" placeholder="e.g. Saturn">
-    <button type="button" class="btn btn-primary" style="margin-bottom:14px;" onclick="addQbFromModal()">💾 Add to My QB's</button>
 
-    <div id="qbListContainer"></div>
+    <!-- Unlock Pro QB Pack -->
+    <div class="creator-box" style="margin-bottom:14px;">
+      <h3>🔓 Redeem Pro QB Pack Code</h3>
+      <p style="font-size:12px;color:var(--muted);margin-bottom:6px;">Enter a pack code from Selar/Paystack (Try: <b>NAIJA2026</b>, <b>FOOTYPRO</b>, or <b>PARTYVIP</b>)</p>
+      <div style="display:flex;gap:6px;">
+        <input type="text" id="packCodeInput" placeholder="Enter code or DSPACK:..." />
+        <button type="button" class="btn btn-gold" style="width:auto;margin-top:0;padding:10px 14px;" onclick="redeemPackCode()">Unlock</button>
+      </div>
+    </div>
+
+    <!-- Add Custom Question -->
+    <h3>➕ Add Question to My QB's</h3>
+    <input type="text" id="newQbQ" placeholder="Question..." style="margin-bottom:6px;" />
+    <input type="text" id="newQbA" placeholder="Secret Answer..." />
+    <div class="row">
+      <button type="button" class="btn btn-primary" onclick="addManualQb()">💾 Save Question</button>
+      <button type="button" class="btn btn-dark" onclick="exportQbPackCode()">📤 Export Sellable Code</button>
+    </div>
+    <div id="exportedCodeBox" class="hidden" style="margin-top:8px;">
+      <label>Shareable DSPACK Code (Sell on Selar/Paystack):</label>
+      <textarea id="exportedCodeText" rows="2" readonly onclick="this.select()"></textarea>
+    </div>
+
+    <h3 style="margin-top:14px;">Saved Questions (<span id="qbCount">0</span>)</h3>
+    <div id="qbListWrap"></div>
   </div>
 </div>
 
 <script>
-// --- SMART MULTI-EXTENSION IMAGE LOADER ---
-const IMG_CANDIDATES = {
-  icon: ['double_sage_icon.jpg', 'double_sage_icon.png', 'double_sage_icon.jpeg', 'icon.jpg', 'icon.png'],
-  battle: ['double_sage_battle.jpg', 'double_sage_battle.png', 'double_sage_battle.jpeg', 'battle.jpg', 'battle.png'],
-  banner: ['double_sage_banner.jpg', 'double_sage_banner.png', 'double_sage_banner.jpeg', 'banner.jpg', 'banner.png'],
-  tourney: ['double_sage_tournament.jpg', 'double_sage_tournament.png', 'double_sage_tournament.jpeg', 'tournament.jpg', 'tournament.png']
-};
-
-function loadSmartImg(imgEl, candidates, onFail) {
-  let idx = 0;
-  function tryNext() {
-    if (idx >= candidates.length) {
-      if (onFail) onFail();
-      return;
-    }
-    imgEl.onerror = () => { idx++; tryNext(); };
-    imgEl.src = candidates[idx];
-  }
-  tryNext();
-}
-
-loadSmartImg(document.getElementById('navIcon'), IMG_CANDIDATES.icon);
-loadSmartImg(document.getElementById('heroBanner'), IMG_CANDIDATES.banner);
-loadSmartImg(document.getElementById('heroBattle'), IMG_CANDIDATES.battle);
-loadSmartImg(document.getElementById('heroTourney'), IMG_CANDIDATES.tourney);
-
-// --- 4-SLIDE 3-SECOND INTRO SPLASH ---
+// --- 1. Bulletproof 4-Slide Intro ---
 const SLIDES = [
-  { label: '1 / 4 — DOUBLE SAGE', key: 'icon' },
-  { label: '2 / 4 — 1V1 MIND DUEL', key: 'battle' },
-  { label: '3 / 4 — OUTSMART YOUR RIVALS', key: 'banner' },
-  { label: '4 / 4 — TOURNAMENT & CLASH', key: 'tourney' }
+  { src: "double_sage_icon.jpg", label: "1 / 4 — DOUBLE SAGE" },
+  { src: "double_sage_battle.jpg", label: "2 / 4 — HEAD-TO-HEAD MIND DUEL" },
+  { src: "double_sage_banner.jpg", label: "3 / 4 — OUTSMART YOUR RIVALS" },
+  { src: "double_sage_tournament.jpg", label: "4 / 4 — TOURNAMENT EDITION" }
 ];
-let introInterval = null;
+let slideIdx = 0, slidePct = 0, introInterval = null;
 
-function startIntroSequence() {
-  const ov = document.getElementById('introOverlay');
+function startIntro() {
+  const ov = document.getElementById("introOverlay");
   if (!ov) return;
-  ov.style.display = 'flex';
-  let slideIdx = 0;
-  let elapsed = 0;
-  const durationPerSlide = 3000;
-
-  function showSlide(i) {
-    document.getElementById('introLabel').textContent = SLIDES[i].label;
-    loadSmartImg(document.getElementById('introImg'), IMG_CANDIDATES[SLIDES[i].key]);
-  }
-  showSlide(0);
-
+  ov.style.display = "flex";
+  slideIdx = 0; slidePct = 0;
+  updateSlideUI();
   if (introInterval) clearInterval(introInterval);
   introInterval = setInterval(() => {
-    elapsed += 100;
-    const pct = Math.min(100, (elapsed / durationPerSlide) * 100);
-    document.getElementById('introProgress').style.width = pct + '%';
-    if (elapsed >= durationPerSlide) {
-      elapsed = 0;
+    slidePct += 5;
+    if (slidePct >= 100) {
+      slidePct = 0;
       slideIdx++;
       if (slideIdx >= SLIDES.length) {
         forceCloseIntro();
-      } else {
-        showSlide(slideIdx);
+        return;
       }
+      updateSlideUI();
     }
-  }, 100);
+    const bar = document.getElementById("introBar");
+    if (bar) bar.style.width = slidePct + "%";
+  }, 150);
 }
 
-function forceCloseIntro() {
+function updateSlideUI() {
+  const img = document.getElementById("introSlideImg");
+  const cap = document.getElementById("introCaption");
+  if (img) { img.style.display = "block"; img.src = SLIDES[slideIdx].src; }
+  if (cap) cap.textContent = SLIDES[slideIdx].label;
+}
+
+window.forceCloseIntro = function() {
   if (introInterval) clearInterval(introInterval);
-  const ov = document.getElementById('introOverlay');
-  if (ov) ov.style.display = 'none';
-  unlockAudio(false);
-}
+  const ov = document.getElementById("introOverlay");
+  if (ov) ov.style.display = "none";
+  unlockAudio();
+};
 
-function replayIntro() {
-  startIntroSequence();
-}
+function replayIntro() { startIntro(); }
 
-startIntroSequence();
+// --- 2. Audio Engine (theme.mp3 + Local Song + Default Theme Reset + Synth Fallback) ---
+let audioCtx = null, masterGain = null, synthTimer = null;
+let musicOn = true, sfxOn = true, masterVol = 0.9, usingCustomFile = false;
 
-// --- AUDIO ENGINE: THEME.MP3 + LOCAL SONG + DEFAULT THEME RESET + SYNTH FALLBACK ---
-let audioCtx = null, masterGain = null, synthBgmTimer = null;
-let musicOn = true, sfxOn = true, masterVol = 0.9;
-let themeAudio = new Audio();
-themeAudio.loop = true;
-themeAudio.volume = masterVol;
-let customBlobUrl = null;
-let usingThemeFile = false;
-
-const THEME_CANDIDATES = ['theme.mp3', 'theme.m4a', 'theme.ogg', 'theme.wav'];
-let themeIdx = 0;
-
-function initThemeTrack() {
-  if (customBlobUrl) {
-    URL.revokeObjectURL(customBlobUrl);
-    customBlobUrl = null;
-  }
-  document.getElementById('resetThemeBtn').classList.add('hidden');
-  themeIdx = 0;
-  tryLoadThemeCandidate();
-}
-
-function tryLoadThemeCandidate() {
-  if (themeIdx >= THEME_CANDIDATES.length) {
-    usingThemeFile = false;
-    return;
-  }
-  themeAudio.onerror = () => {
-    themeIdx++;
-    tryLoadThemeCandidate();
-  };
-  themeAudio.oncanplaythrough = () => {
-    usingThemeFile = true;
-    if (synthBgmTimer) { clearInterval(synthBgmTimer); synthBgmTimer = null; }
-    if (musicOn) themeAudio.play().catch(() => {});
-  };
-  themeAudio.src = THEME_CANDIDATES[themeIdx];
-}
-
-initThemeTrack();
-
-function unlockAudio(fromButton) {
+function unlockAudio() {
   if (!audioCtx) {
     const AC = window.AudioContext || window.webkitAudioContext;
-    audioCtx = new AC();
-    const comp = audioCtx.createDynamicsCompressor();
-    comp.threshold.value = -12;
-    comp.ratio.value = 8;
-    masterGain = audioCtx.createGain();
-    masterGain.gain.value = masterVol;
-    comp.connect(masterGain);
-    masterGain.connect(audioCtx.destination);
-    window._audioOut = comp;
-  }
-  if (audioCtx.state === 'suspended') audioCtx.resume();
-
-  if (musicOn) {
-    if (usingThemeFile || customBlobUrl) {
-      themeAudio.volume = masterVol;
-      themeAudio.play().catch(() => startSynthBgm());
-    } else {
-      startSynthBgm();
+    if (AC) {
+      audioCtx = new AC();
+      const comp = audioCtx.createDynamicsCompressor();
+      comp.threshold.value = -12;
+      comp.ratio.value = 8;
+      masterGain = audioCtx.createGain();
+      masterGain.gain.value = masterVol;
+      comp.connect(masterGain);
+      masterGain.connect(audioCtx.destination);
+      window._compOut = comp;
     }
   }
-  if (fromButton) playSfx('lock');
+  if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
+  if (musicOn) startMusic();
 }
 
-function startSynthBgm() {
-  if (synthBgmTimer || usingThemeFile || customBlobUrl) return;
+function startMusic() {
+  const bg = document.getElementById("bgAudio");
+  if (!bg) return;
+  bg.volume = masterVol;
+  bg.play().then(() => {
+    if (synthTimer) { clearInterval(synthTimer); synthTimer = null; }
+  }).catch(() => {
+    if (!synthTimer) startSynthFallback();
+  });
+}
+
+function startSynthFallback() {
   const notes = [130.81, 164.81, 196.00, 261.63, 196.00, 164.81, 146.83, 220.00];
   let step = 0;
-  synthBgmTimer = setInterval(() => {
-    if (!musicOn || usingThemeFile || customBlobUrl || !audioCtx || audioCtx.state !== 'running') return;
+  synthTimer = setInterval(() => {
+    if (!musicOn || !audioCtx || audioCtx.state !== "running") return;
     const osc = audioCtx.createOscillator();
     const g = audioCtx.createGain();
-    osc.type = 'sawtooth';
+    osc.type = "sawtooth";
     osc.frequency.value = notes[step % notes.length];
-    g.gain.setValueAtTime(0.26, audioCtx.currentTime);
+    g.gain.setValueAtTime(0.25, audioCtx.currentTime);
     g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.22);
     osc.connect(g);
-    g.connect(window._audioOut);
+    g.connect(window._compOut);
     osc.start();
     osc.stop(audioCtx.currentTime + 0.24);
     step++;
@@ -596,494 +506,473 @@ function startSynthBgm() {
 
 function toggleMusic() {
   musicOn = !musicOn;
-  const btn = document.getElementById('musicBtn');
-  btn.textContent = musicOn ? '🎵 Music: ON' : '🎵 Music: OFF';
-  btn.classList.toggle('active', musicOn);
-  if (musicOn) {
-    unlockAudio(false);
-  } else {
-    themeAudio.pause();
+  document.getElementById("musicBtn").textContent = musicOn ? "🎵 Music: ON" : "🎵 Music: OFF";
+  const bg = document.getElementById("bgAudio");
+  if (musicOn) { unlockAudio(); }
+  else {
+    if (bg) bg.pause();
+    if (synthTimer) { clearInterval(synthTimer); synthTimer = null; }
   }
 }
 
 function toggleSfx() {
   sfxOn = !sfxOn;
-  const btn = document.getElementById('sfxBtn');
-  btn.textContent = sfxOn ? '🔊 SFX: ON' : '🔇 SFX: OFF';
-  btn.classList.toggle('active', sfxOn);
+  document.getElementById("sfxBtn").textContent = sfxOn ? "🔊 SFX: ON" : "🔇 SFX: OFF";
 }
 
-function setVolume(val) {
-  masterVol = parseFloat(val);
-  themeAudio.volume = masterVol;
-  if (masterGain && audioCtx) masterGain.gain.setValueAtTime(masterVol, audioCtx.currentTime);
+function setVolume(v) {
+  masterVol = parseFloat(v);
+  if (masterGain) masterGain.gain.value = masterVol;
+  const bg = document.getElementById("bgAudio");
+  if (bg) bg.volume = masterVol;
 }
 
-function loadLocalSong(e) {
-  const file = e.target.files[0];
-  if (!file) return;
-  if (customBlobUrl) URL.revokeObjectURL(customBlobUrl);
-  customBlobUrl = URL.createObjectURL(file);
-  if (synthBgmTimer) { clearInterval(synthBgmTimer); synthBgmTimer = null; }
-  themeAudio.onerror = null;
-  themeAudio.oncanplaythrough = null;
-  themeAudio.src = customBlobUrl;
-  themeAudio.volume = masterVol;
-  musicOn = true;
-  document.getElementById('musicBtn').textContent = '🎵 Music: ON';
-  document.getElementById('musicBtn').classList.add('active');
-  document.getElementById('resetThemeBtn').classList.remove('hidden');
-  themeAudio.play().catch(() => {});
-  e.target.value = '';
+function loadCustomSong(inp) {
+  if (!inp.files || !inp.files[0]) return;
+  const url = URL.createObjectURL(inp.files[0]);
+  const bg = document.getElementById("bgAudio");
+  if (synthTimer) { clearInterval(synthTimer); synthTimer = null; }
+  bg.pause();
+  bg.src = url;
+  bg.loop = true;
+  bg.volume = masterVol;
+  bg.play().catch(() => {});
+  usingCustomFile = true;
+  document.getElementById("resetThemeBtn").classList.remove("hidden");
 }
 
-function resetToThemeSong() {
-  themeAudio.pause();
-  initThemeTrack();
-  musicOn = true;
-  document.getElementById('musicBtn').textContent = '🎵 Music: ON';
-  document.getElementById('musicBtn').classList.add('active');
-  setTimeout(() => unlockAudio(true), 150);
+function resetToDefaultTheme() {
+  const inp = document.getElementById("songPicker");
+  if (inp) inp.value = "";
+  const bg = document.getElementById("bgAudio");
+  bg.pause();
+  bg.src = "theme.mp3";
+  bg.loop = true;
+  usingCustomFile = false;
+  document.getElementById("resetThemeBtn").classList.add("hidden");
+  if (musicOn) startMusic();
 }
 
 function playSfx(type) {
   if (!sfxOn) return;
-  if (!audioCtx) unlockAudio(false);
-  if (!audioCtx || audioCtx.state !== 'running') return;
-  const now = audioCtx.currentTime;
+  unlockAudio();
+  if (!audioCtx) return;
   const osc = audioCtx.createOscillator();
   const g = audioCtx.createGain();
-  osc.connect(g);
-  g.connect(window._audioOut);
-
-  if (type === 'tick') {
-    osc.type = 'sine';
-    osc.frequency.setValueAtTime(880, now);
-    g.gain.setValueAtTime(0.25, now);
-    g.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
-    osc.start(now); osc.stop(now + 0.09);
-  } else if (type === 'lock') {
-    osc.type = 'triangle';
-    osc.frequency.setValueAtTime(523.25, now);
-    osc.frequency.setValueAtTime(659.25, now + 0.08);
-    g.gain.setValueAtTime(0.35, now);
-    g.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
-    osc.start(now); osc.stop(now + 0.24);
-  } else if (type === 'win') {
-    osc.type = 'triangle';
+  const now = audioCtx.currentTime;
+  if (type === "win") {
+    osc.type = "triangle";
     osc.frequency.setValueAtTime(523.25, now);
     osc.frequency.setValueAtTime(659.25, now + 0.1);
     osc.frequency.setValueAtTime(783.99, now + 0.2);
-    osc.frequency.setValueAtTime(1046.5, now + 0.3);
-    g.gain.setValueAtTime(0.4, now);
-    g.gain.exponentialRampToValueAtTime(0.001, now + 0.55);
-    osc.start(now); osc.stop(now + 0.58);
-  } else if (type === 'wrong') {
-    osc.type = 'sawtooth';
+  } else if (type === "lose") {
+    osc.type = "sawtooth";
     osc.frequency.setValueAtTime(180, now);
-    osc.frequency.linearRampToValueAtTime(110, now + 0.35);
-    g.gain.setValueAtTime(0.38, now);
-    g.gain.exponentialRampToValueAtTime(0.001, now + 0.38);
-    osc.start(now); osc.stop(now + 0.4);
+    osc.frequency.linearRampToValueAtTime(110, now + 0.3);
+  } else if (type === "tick") {
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(880, now);
+  } else {
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(600, now);
+    osc.frequency.exponentialRampToValueAtTime(900, now + 0.15);
   }
+  g.gain.setValueAtTime(0.35, now);
+  g.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+  osc.connect(g);
+  g.connect(window._compOut);
+  osc.start(now);
+  osc.stop(now + 0.36);
 }
 
-document.addEventListener('pointerdown', () => unlockAudio(false), { once: true });
-
-// --- STARTER PROMPTS & MY QB'S (QUESTION BANKS) ---
-const STARTER_PROMPTS = [
+// --- 3. Starter Prompts, My QB's & Pro QB Packs ---
+const STARTER_QBS = [
+  { q: "What has keys that open no locks, space but no room, and you can enter but not go outside?", a: "A keyboard" },
+  { q: "Which country won the first ever FIFA World Cup in 1930?", a: "Uruguay" },
   { q: "How many continents are there on Earth?", a: "7" },
-  { q: "What is the chemical symbol for Gold?", a: "Au" },
-  { q: "In what year did man first land on the Moon?", a: "1969" },
-  { q: "Which African country is the most populous?", a: "Nigeria" },
-  { q: "How many players are on a standard football (soccer) team on the pitch?", a: "11" },
-  { q: "What is the capital city of Japan?", a: "Tokyo" },
-  { q: "How many degrees are in a right angle?", a: "90" },
-  { q: "Which planet is known as the Red Planet?", a: "Mars" },
-  { q: "How many days are in a leap year?", a: "366" },
-  { q: "What is the largest ocean on Earth?", a: "Pacific Ocean" }
+  { q: "I speak without a mouth and hear without ears. What am I?", a: "An echo" },
+  { q: "In what year did Nigeria gain independence?", a: "1960" },
+  { q: "What gets wetter the more it dries?", a: "A towel" },
+  { q: "Which planet in our solar system has the most moons?", a: "Saturn" },
+  { q: "How many players are on a standard soccer team on the pitch?", a: "11" }
 ];
 
-let myQbs = JSON.parse(localStorage.getItem('double_sage_qbs') || '[]');
-let usedQbIndices = new Set();
+const BUILTIN_PACKS = {
+  "NAIJA2026": [
+    { q: "Which Nigerian artist won the first Grammy for Best African Music Performance?", a: "Tyla" },
+    { q: "What is the capital city of Ogun State?", a: "Abeokuta" },
+    { q: "In what year did the Super Eagles win their third AFCON title in South Africa?", a: "2013" },
+    { q: "Which famous rock formation in Abeokuta served as a fortress during 19th-century wars?", a: "Olumo Rock" }
+  ],
+  "FOOTYPRO": [
+    { q: "Who holds the all-time Premier League goalscoring record with 260 goals?", a: "Alan Shearer" },
+    { q: "Which club has won the most UEFA Champions League titles?", a: "Real Madrid" },
+    { q: "How many minutes are in a standard football match excluding stoppage time?", a: "90" }
+  ],
+  "PARTYVIP": [
+    { q: "What has hands and a face, but can't hold anything or smile?", a: "A clock" },
+    { q: "The more of this there is, the less you see. What is it?", a: "Darkness" },
+    { q: "What belongs to you, but other people use it more than you do?", a: "Your name" }
+  ]
+};
 
-function saveQbsToStorage() {
-  localStorage.setItem('double_sage_qbs', JSON.stringify(myQbs));
+function getMyQbs() {
+  try { return JSON.parse(localStorage.getItem("ds_my_qbs") || "[]"); }
+  catch { return []; }
+}
+function setMyQbs(arr) {
+  localStorage.setItem("ds_my_qbs", JSON.stringify(arr));
   refreshPromptDropdown();
 }
 
 function refreshPromptDropdown() {
-  const sel = document.getElementById('promptSelect');
-  sel.innerHTML = '<option value="">-- Choose Starter Prompt or My QB --</option>';
-  if (myQbs.length > 0) {
-    const grp1 = document.createElement('optgroup');
-    grp1.label = '📚 My Saved QB's';
-    myQbs.forEach((item, i) => {
-      const opt = document.createElement('option');
-      opt.value = 'qb:' + i;
-      opt.textContent = item.q + ' (' + item.a + ')';
-      grp1.appendChild(opt);
-    });
-    sel.appendChild(grp1);
-  }
-  const grp2 = document.createElement('optgroup');
-  grp2.label = '⚡ Starter Prompts';
-  STARTER_PROMPTS.forEach((item, i) => {
-    const opt = document.createElement('option');
-    opt.value = 'st:' + i;
-    opt.textContent = item.q;
-    grp2.appendChild(opt);
+  const sel = document.getElementById("promptSelect");
+  if (!sel) return;
+  const mine = getMyQbs();
+  let html = `<option value="">-- Choose Starter or My QB (${mine.length} saved) --</option>`;
+  mine.forEach((item, i) => {
+    html += `<option value="my_${i}">⭐ [My QB] ${item.q.slice(0, 48)}...</option>`;
   });
-  sel.appendChild(grp2);
+  STARTER_QBS.forEach((item, i) => {
+    html += `<option value="st_${i}">💡 ${item.q.slice(0, 48)}...</option>`;
+  });
+  sel.innerHTML = html;
 }
 
-function applyPromptSelection() {
-  const val = document.getElementById('promptSelect').value;
+function applySelectedPrompt() {
+  const val = document.getElementById("promptSelect").value;
   if (!val) return;
-  const [type, idxStr] = val.split(':');
+  const [kind, idxStr] = val.split("_");
   const idx = parseInt(idxStr, 10);
-  const item = type === 'qb' ? myQbs[idx] : STARTER_PROMPTS[idx];
+  const item = kind === "my" ? getMyQbs()[idx] : STARTER_QBS[idx];
   if (item) {
-    document.getElementById('qInput').value = item.q;
-    document.getElementById('aInput').value = item.a;
-    if (type === 'qb') usedQbIndices.add(idx);
+    document.getElementById("qInput").value = item.q;
+    document.getElementById("aInput").value = item.a;
   }
 }
 
-function loadNextUnusedQb() {
-  if (myQbs.length === 0) {
-    alert("You haven't saved any QB's yet! Type a question & answer and tap 'Save to My QB's', or open 'My QB's' at the top.");
-    return;
-  }
-  let found = -1;
-  for (let i = 0; i < myQbs.length; i++) {
-    if (!usedQbIndices.has(i)) { found = i; break; }
-  }
-  if (found === -1) {
-    usedQbIndices.clear();
-    found = 0;
-  }
-  usedQbIndices.add(found);
-  document.getElementById('qInput').value = myQbs[found].q;
-  document.getElementById('aInput').value = myQbs[found].a;
-  playSfx('lock');
+let qbCycleIdx = 0;
+function nextQbPrompt() {
+  const all = [...getMyQbs(), ...STARTER_QBS];
+  const item = all[qbCycleIdx % all.length];
+  qbCycleIdx++;
+  document.getElementById("qInput").value = item.q;
+  document.getElementById("aInput").value = item.a;
 }
 
 function saveCurrentToQb() {
-  const q = document.getElementById('qInput').value.trim();
-  const a = document.getElementById('aInput').value.trim();
-  if (!q || !a) { alert('Enter both a Question and Secret Answer first.'); return; }
-  myQbs.unshift({ q, a });
-  saveQbsToStorage();
-  playSfx('lock');
-  alert('Saved to My QB's!');
+  const q = document.getElementById("qInput").value.trim();
+  const a = document.getElementById("aInput").value.trim();
+  if (!q || !a) return alert("Enter both a Question and Secret Answer first.");
+  const list = getMyQbs();
+  list.unshift({ q, a });
+  setMyQbs(list);
+  playSfx("chime");
+  alert("Saved to My QB's!");
 }
 
 function openQbModal() {
   renderQbModalList();
-  document.getElementById('qbModal').classList.remove('hidden');
+  document.getElementById("qbModal").classList.remove("hidden");
 }
-function closeQbModal() {
-  document.getElementById('qbModal').classList.add('hidden');
-}
-function addQbFromModal() {
-  const q = document.getElementById('qbNewQ').value.trim();
-  const a = document.getElementById('qbNewA').value.trim();
-  if (!q || !a) return;
-  myQbs.unshift({ q, a });
-  document.getElementById('qbNewQ').value = '';
-  document.getElementById('qbNewA').value = '';
-  saveQbsToStorage();
-  renderQbModalList();
-  playSfx('lock');
-}
-function deleteQb(i) {
-  myQbs.splice(i, 1);
-  saveQbsToStorage();
-  renderQbModalList();
-}
+function closeQbModal() { document.getElementById("qbModal").classList.add("hidden"); }
+
 function renderQbModalList() {
-  const box = document.getElementById('qbListContainer');
-  if (myQbs.length === 0) {
-    box.innerHTML = '<div style="color:var(--muted);font-size:0.85rem;text-align:center;padding:12px;">No saved questions yet.</div>';
+  const list = getMyQbs();
+  document.getElementById("qbCount").textContent = list.length;
+  const wrap = document.getElementById("qbListWrap");
+  if (!list.length) {
+    wrap.innerHTML = `<p style="font-size:13px;color:var(--muted);margin-top:8px;">No saved questions yet. Add one above or unlock a Pro QB Pack!</p>`;
     return;
   }
-  box.innerHTML = myQbs.map((item, i) => `
+  wrap.innerHTML = list.map((item, i) => `
     <div class="qb-item">
-      <div style="font-size:0.85rem;">
-        <div style="font-weight:700;">${item.q}</div>
-        <div style="color:var(--accent);font-size:0.78rem;">Ans: ${item.a}</div>
-      </div>
-      <button type="button" class="pill-btn" style="color:#fca5a5;" onclick="deleteQb(${i})">🗑</button>
+      <div style="font-size:13px;"><strong>Q:</strong> ${item.q}<br><span style="color:var(--green);"><strong>A:</strong> ${item.a}</span></div>
+      <button type="button" class="pill" style="color:var(--red);" onclick="deleteQb(${i})">🗑</button>
     </div>
-  `).join('');
+  `).join("");
 }
 
-// --- MATCH ENGINE ---
-let state = {
-  players: [],
-  umpireMode: false,
-  umpireName: '',
-  qPerPlayer: 2,
-  timerSec: 25,
-  turns: [],
-  turnIdx: 0,
-  currentQ: '',
-  currentA: '',
-  currentGuess: '',
-  timeTaken: 0,
-  guessInterval: null,
-  nextScreen: 'ask'
-};
+function addManualQb() {
+  const q = document.getElementById("newQbQ").value.trim();
+  const a = document.getElementById("newQbA").value.trim();
+  if (!q || !a) return alert("Enter both question and answer.");
+  const list = getMyQbs();
+  list.unshift({ q, a });
+  setMyQbs(list);
+  document.getElementById("newQbQ").value = "";
+  document.getElementById("newQbA").value = "";
+  renderQbModalList();
+  playSfx("chime");
+}
+
+function deleteQb(i) {
+  const list = getMyQbs();
+  list.splice(i, 1);
+  setMyQbs(list);
+  renderQbModalList();
+}
+
+function exportQbPackCode() {
+  const list = getMyQbs();
+  if (!list.length) return alert("Save at least 1 question in My QB's before exporting.");
+  const encoded = "DSPACK:" + btoa(unescape(encodeURIComponent(JSON.stringify(list))));
+  document.getElementById("exportedCodeBox").classList.remove("hidden");
+  document.getElementById("exportedCodeText").value = encoded;
+}
+
+function redeemPackCode() {
+  const raw = document.getElementById("packCodeInput").value.trim();
+  if (!raw) return;
+  const upper = raw.toUpperCase();
+  let imported = null;
+  if (BUILTIN_PACKS[upper]) {
+    imported = BUILTIN_PACKS[upper];
+  } else if (raw.startsWith("DSPACK:")) {
+    try {
+      imported = JSON.parse(decodeURIComponent(escape(atob(raw.slice(7)))));
+    } catch { imported = null; }
+  }
+  if (!imported || !Array.isArray(imported)) {
+    return alert("Invalid pack code. Try NAIJA2026, FOOTYPRO, PARTYVIP, or a valid DSPACK code.");
+  }
+  const existing = getMyQbs();
+  setMyQbs([...imported, ...existing]);
+  document.getElementById("packCodeInput").value = "";
+  renderQbModalList();
+  playSfx("win");
+  alert(`Unlocked ${imported.length} Pro QB questions into My QB's!`);
+}
+
+// Creator Payment Link
+function saveCreatorLink() {
+  const url = document.getElementById("creatorPayLink").value.trim();
+  if (!url) return;
+  localStorage.setItem("ds_creator_link", url);
+  alert("Creator payment/tournament link saved!");
+}
+function openPaymentLink() {
+  const url = localStorage.getItem("ds_creator_link") || "https://paystack.com";
+  window.open(url, "_blank");
+}
+
+// --- 4. Core Pass & Play Engine ---
+let players = [], qPerPlayer = 2, timerLimit = 25, umpireMode = false, umpireName = "";
+let turnQueue = [], currentTurnIdx = 0;
+let activeQ = "", activeSecret = "", activeGuess = "", guessElapsed = 0, countdownTimer = null;
 
 function renderNameInputs() {
-  const n = Math.min(10, Math.max(2, parseInt(document.getElementById('numPlayers').value || '2', 10)));
-  const ump = document.getElementById('umpireMode').checked;
-  const box = document.getElementById('playerNamesBox');
-  let html = '';
+  const n = Math.min(10, Math.max(2, parseInt(document.getElementById("playerCount").value || "2", 10)));
+  const wrap = document.getElementById("playerNamesWrap");
+  let html = "";
   for (let i = 0; i < n; i++) {
-    const label = (ump && i === 0) ? 'Player 1 (⚖ Umpire / Organizer)' : `Player ${i + 1} Name`;
-    const def = (ump && i === 0) ? 'Umpire' : `Player ${i + 1}`;
-    html += `<label>${label}</label><input type="text" class="pname-input" value="${def}">`;
+    html += `<label>Player ${i + 1} Name</label><input type="text" class="pname-inp" value="Player ${i + 1}" />`;
   }
-  box.innerHTML = html;
+  wrap.innerHTML = html;
 }
-renderNameInputs();
-refreshPromptDropdown();
 
-function hideAllViews() {
-  ['setupView', 'passView', 'askView', 'guessView', 'reviewView', 'resultView'].forEach(id => {
-    document.getElementById(id).classList.add('hidden');
-  });
+function toggleUmpireInput() {
+  const on = document.getElementById("umpireMode").checked;
+  document.getElementById("umpireNameWrap").classList.toggle("hidden", !on);
 }
 
 function startMatch() {
-  unlockAudio(true);
-  const inputs = Array.from(document.querySelectorAll('.pname-input'));
-  const names = inputs.map((inp, i) => inp.value.trim() || `Player ${i + 1}`);
-  state.umpireMode = document.getElementById('umpireMode').checked;
-  state.qPerPlayer = Math.min(15, Math.max(1, parseInt(document.getElementById('qPerPlayer').value || '2', 10)));
-  state.timerSec = Math.min(60, Math.max(10, parseInt(document.getElementById('turnTimer').value || '25', 10)));
+  unlockAudio();
+  const inps = document.querySelectorAll(".pname-inp");
+  players = Array.from(inps).map((el, i) => ({
+    name: el.value.trim() || `Player ${i + 1}`,
+    score: 0,
+    totalTime: 0
+  }));
+  qPerPlayer = Math.min(10, Math.max(1, parseInt(document.getElementById("qPerPlayer").value || "2", 10)));
+  timerLimit = Math.min(60, Math.max(10, parseInt(document.getElementById("timerSec").value || "25", 10)));
+  umpireMode = document.getElementById("umpireMode").checked;
+  umpireName = document.getElementById("umpireName").value.trim() || "Umpire";
 
-  if (state.umpireMode) {
-    state.umpireName = names[0];
-    state.players = names.slice(1).map(name => ({ name, score: 0, totalTime: 0 }));
-  } else {
-    state.umpireName = '';
-    state.players = names.map(name => ({ name, score: 0, totalTime: 0 }));
-  }
-
-  state.turns = [];
-  for (let r = 0; r < state.qPerPlayer; r++) {
-    for (let i = 0; i < state.players.length; i++) {
-      if (state.umpireMode) {
-        state.turns.push({ asker: state.umpireName, guesserIdx: i, round: r + 1 });
-      } else {
-        const askerIdx = (i + 1) % state.players.length;
-        state.turns.push({ asker: state.players[askerIdx].name, guesserIdx: i, round: r + 1 });
-      }
+  turnQueue = [];
+  for (let r = 0; r < qPerPlayer; r++) {
+    for (let i = 0; i < players.length; i++) {
+      const asker = umpireMode ? umpireName : players[i].name;
+      const guesserIdx = umpireMode ? i : (i + 1) % players.length;
+      turnQueue.push({ asker, guesserIdx });
     }
   }
-
-  state.turnIdx = 0;
-  usedQbIndices.clear();
-  document.getElementById('leaderboardCard').classList.remove('hidden');
-  document.getElementById('newMatchBtn').classList.add('hidden');
+  currentTurnIdx = 0;
+  document.getElementById("setupScreen").classList.add("hidden");
+  document.getElementById("leaderboardCard").classList.remove("hidden");
   renderLeaderboard();
-  prepAskerGate();
+  prepareAskPhase();
 }
 
-function prepAskerGate() {
-  const t = state.turns[state.turnIdx];
-  const guesser = state.players[t.guesserIdx];
-  hideAllViews();
-  state.nextScreen = 'ask';
-  document.getElementById('passRoleBadge').textContent = state.umpireMode ? 'UMPIRE TURN' : 'ASKER TURN';
-  document.getElementById('passTitle').textContent = `Pass Phone to ${t.asker}`;
-  document.getElementById('passSubtitle').textContent = `${t.asker} will set a secret question for ${guesser.name}.`;
-  document.getElementById('passView').classList.remove('hidden');
-}
-
-function revealTurnScreen() {
-  unlockAudio(false);
-  hideAllViews();
-  const t = state.turns[state.turnIdx];
-  const guesser = state.players[t.guesserIdx];
-
-  if (state.nextScreen === 'ask') {
-    document.getElementById('askRoundBadge').textContent = `TURN ${state.turnIdx + 1} OF ${state.turns.length}`;
-    document.getElementById('askMatchupText').textContent = `${t.asker} → ${guesser.name}`;
-    document.getElementById('askHeader').textContent = `✍️ ${t.asker}: Set Secret Question`;
-    document.getElementById('promptSelect').value = '';
-    document.getElementById('qInput').value = '';
-    document.getElementById('aInput').value = '';
-    document.getElementById('askView').classList.remove('hidden');
-  } else if (state.nextScreen === 'guess') {
-    document.getElementById('guessTurnBadge').textContent = `TURN ${state.turnIdx + 1} OF ${state.turns.length}`;
-    document.getElementById('guessMatchupText').textContent = `Asked by ${t.asker}`;
-    document.getElementById('guessQuestionText').textContent = state.currentQ;
-    const hasDigits = /\d/.test(state.currentA);
-    document.getElementById('digitHintBox').classList.toggle('hidden', !hasDigits);
-    document.getElementById('guessInput').value = '';
-    document.getElementById('guessView').classList.remove('hidden');
-    startTurnCountdown();
+function prepareAskPhase() {
+  if (currentTurnIdx >= turnQueue.length) {
+    finishMatch();
+    return;
   }
+  const t = turnQueue[currentTurnIdx];
+  const guesser = players[t.guesserIdx].name;
+  hideAllPhases();
+  document.getElementById("askScreen").classList.remove("hidden");
+  document.getElementById("askHeader").textContent = `Turn ${currentTurnIdx + 1}/${turnQueue.length}: ${t.asker} Sets Question`;
+  document.getElementById("askSub").textContent = `Keep secret from ${guesser}!`;
+  document.getElementById("qInput").value = "";
+  document.getElementById("aInput").value = "";
+  refreshPromptDropdown();
 }
 
 function lockQuestion() {
-  const q = document.getElementById('qInput').value.trim();
-  const a = document.getElementById('aInput').value.trim();
-  if (!q || !a) { alert('Please enter both a Question and a Secret Answer.'); return; }
-  state.currentQ = q;
-  state.currentA = a;
-  playSfx('lock');
+  const q = document.getElementById("qInput").value.trim();
+  const a = document.getElementById("aInput").value.trim();
+  if (!q || !a) return alert("Please enter both a Question and a Secret Answer.");
+  activeQ = q;
+  activeSecret = a;
+  playSfx("chime");
 
-  const t = state.turns[state.turnIdx];
-  const guesser = state.players[t.guesserIdx];
-  hideAllViews();
-  state.nextScreen = 'guess';
-  document.getElementById('passRoleBadge').textContent = 'GUESSER TURN';
-  document.getElementById('passTitle').textContent = `Pass Phone to ${guesser.name}`;
-  document.getElementById('passSubtitle').textContent = `Get ready! You have ${state.timerSec} seconds to answer.`;
-  document.getElementById('passView').classList.remove('hidden');
+  const t = turnQueue[currentTurnIdx];
+  const guesser = players[t.guesserIdx].name;
+  hideAllPhases();
+  document.getElementById("handoffScreen").classList.remove("hidden");
+  document.getElementById("handoffText").textContent = `Hand the phone to ${guesser}!`;
 }
 
-function startTurnCountdown() {
-  if (state.guessInterval) clearInterval(state.guessInterval);
-  let left = state.timerSec;
-  const startMs = Date.now();
-  const disp = document.getElementById('countdownDisplay');
-  disp.textContent = left + 's';
-  disp.classList.remove('timer-urgent');
+function beginGuessTurn() {
+  const t = turnQueue[currentTurnIdx];
+  const guesser = players[t.guesserIdx].name;
+  hideAllPhases();
+  document.getElementById("guessScreen").classList.remove("hidden");
+  document.getElementById("guessHeader").textContent = `${guesser}'s Turn to Answer`;
+  document.getElementById("displayQuestion").textContent = activeQ;
+  document.getElementById("guessInput").value = "";
 
-  state.guessInterval = setInterval(() => {
-    left--;
-    disp.textContent = Math.max(0, left) + 's';
-    if (left <= 5 && left > 0) {
-      disp.classList.add('timer-urgent');
-      playSfx('tick');
+  // Conditional Manager Digit Hint
+  const hasDigits = /\d/.test(activeSecret);
+  document.getElementById("digitHintBox").classList.toggle("hidden", !hasDigits);
+
+  let rem = timerLimit;
+  const startMs = Date.now();
+  const tDisp = document.getElementById("timerDisplay");
+  tDisp.textContent = rem + "s";
+  tDisp.classList.remove("danger");
+
+  if (countdownTimer) clearInterval(countdownTimer);
+  countdownTimer = setInterval(() => {
+    rem--;
+    tDisp.textContent = rem + "s";
+    if (rem <= 5 && rem > 0) {
+      tDisp.classList.add("danger");
+      playSfx("tick");
+      if (navigator.vibrate) navigator.vibrate(120);
     }
-    if (left <= 0) {
-      clearInterval(state.guessInterval);
-      state.timeTaken = state.timerSec;
-      state.currentGuess = document.getElementById('guessInput').value.trim() || '(Time Expired — No Answer)';
-      openReviewScreen();
+    if (rem <= 0) {
+      clearInterval(countdownTimer);
+      guessElapsed = timerLimit;
+      submitGuess(true);
     }
   }, 1000);
-
-  state._turnStartMs = startMs;
+  window._turnStartMs = startMs;
 }
 
-function submitGuess() {
-  if (state.guessInterval) clearInterval(state.guessInterval);
-  const elapsed = Math.min(state.timerSec, Math.max(0.1, (Date.now() - state._turnStartMs) / 1000));
-  state.timeTaken = parseFloat(elapsed.toFixed(1));
-  state.currentGuess = document.getElementById('guessInput').value.trim() || '(Blank)';
-  playSfx('lock');
-  openReviewScreen();
-}
+function submitGuess(timedOut) {
+  if (countdownTimer) clearInterval(countdownTimer);
+  if (!timedOut) {
+    guessElapsed = Math.max(1, Math.round((Date.now() - (window._turnStartMs || Date.now())) / 1000));
+  }
+  activeGuess = document.getElementById("guessInput").value.trim() || (timedOut ? "(Time Expired)" : "(No Answer)");
 
-function openReviewScreen() {
-  const t = state.turns[state.turnIdx];
-  hideAllViews();
-  document.getElementById('reviewHeader').textContent = `⚖ ${t.asker}: Judge the Answer`;
-  document.getElementById('revQ').textContent = state.currentQ;
-  document.getElementById('revSecret').textContent = state.currentA;
-  document.getElementById('revGuess').textContent = state.currentGuess;
-  document.getElementById('revTime').textContent = `(${state.timeTaken}s)`;
-  document.getElementById('reviewView').classList.remove('hidden');
+  const t = turnQueue[currentTurnIdx];
+  hideAllPhases();
+  document.getElementById("reviewScreen").classList.remove("hidden");
+  document.getElementById("reviewHeader").textContent = `${t.asker}: Judge ${players[t.guesserIdx].name}'s Answer`;
+  document.getElementById("revQ").textContent = activeQ;
+  document.getElementById("revSecret").textContent = activeSecret;
+  document.getElementById("revGuess").textContent = `${activeGuess} (${guessElapsed}s)`;
 }
 
 function ruleAnswer(isCorrect) {
-  const t = state.turns[state.turnIdx];
-  const guesser = state.players[t.guesserIdx];
-  hideAllViews();
-
-  document.getElementById('contestPromptBox').classList.add('hidden');
-  document.getElementById('contestApprovalBox').classList.add('hidden');
-  document.getElementById('nextTurnBtn').classList.remove('hidden');
+  const t = turnQueue[currentTurnIdx];
+  const p = players[t.guesserIdx];
+  hideAllPhases();
+  document.getElementById("resultScreen").classList.remove("hidden");
+  document.getElementById("contestResolveBox").classList.add("hidden");
+  document.getElementById("nextTurnBtn").classList.remove("hidden");
 
   if (isCorrect) {
-    guesser.score += 5;
-    guesser.totalTime = parseFloat((guesser.totalTime + state.timeTaken).toFixed(1));
-    playSfx('win');
-    document.getElementById('resBanner').textContent = `✅ Correct! +5 Pts to ${guesser.name}`;
-    document.getElementById('resDetail').textContent = `Answered in ${state.timeTaken}s.`;
+    p.score += 5;
+    p.totalTime += guessElapsed;
+    playSfx("win");
+    document.getElementById("resTitle").textContent = "✅ Correct! +5 Points";
+    document.getElementById("resDetail").textContent = `${p.name} scored +5 pts in ${guessElapsed}s!`;
+    document.getElementById("contestBtn").classList.add("hidden");
   } else {
-    playSfx('wrong');
-    document.getElementById('resBanner').textContent = `❌ Marked Wrong (0 Pts)`;
-    document.getElementById('resDetail').textContent = state.umpireMode
-      ? `Umpire ${t.asker}'s ruling is final.`
-      : `${guesser.name} may contest if they believe their answer was fair.`;
-    if (!state.umpireMode) {
-      document.getElementById('contestPromptBox').classList.remove('hidden');
-    }
+    playSfx("lose");
+    document.getElementById("resTitle").textContent = "❌ Marked Wrong (0 Pts)";
+    document.getElementById("resDetail").textContent = `Secret Answer was: "${activeSecret}".`;
+    // Show Contest button ONLY in Standard Mode
+    document.getElementById("contestBtn").classList.toggle("hidden", umpireMode);
   }
   renderLeaderboard();
-  document.getElementById('resultView').classList.remove('hidden');
 }
 
 function triggerContest() {
-  playSfx('wrong');
-  document.getElementById('contestPromptBox').classList.add('hidden');
-  document.getElementById('nextTurnBtn').classList.add('hidden');
-  document.getElementById('contestApprovalBox').classList.remove('hidden');
+  document.getElementById("contestBtn").classList.add("hidden");
+  document.getElementById("nextTurnBtn").classList.add("hidden");
+  document.getElementById("contestResolveBox").classList.remove("hidden");
 }
 
-function resolveContest(action) {
-  const t = state.turns[state.turnIdx];
-  const guesser = state.players[t.guesserIdx];
-  document.getElementById('contestApprovalBox').classList.add('hidden');
-  document.getElementById('nextTurnBtn').classList.remove('hidden');
-
-  if (action === 'accept') {
-    guesser.score += 5;
-    guesser.totalTime = parseFloat((guesser.totalTime + state.timeTaken).toFixed(1));
-    playSfx('win');
-    document.getElementById('resBanner').textContent = `✅ Contest Accepted! +5 Pts to ${guesser.name}`;
-    document.getElementById('resDetail').textContent = `${t.asker} approved the guess.`;
+function resolveContest(accepted) {
+  const t = turnQueue[currentTurnIdx];
+  const p = players[t.guesserIdx];
+  document.getElementById("contestResolveBox").classList.add("hidden");
+  document.getElementById("nextTurnBtn").classList.remove("hidden");
+  if (accepted) {
+    p.score += 5;
+    p.totalTime += guessElapsed;
+    playSfx("win");
+    document.getElementById("resTitle").textContent = "✅ Contest Accepted! +5 Points";
+    document.getElementById("resDetail").textContent = `${p.name} awarded +5 pts!`;
     renderLeaderboard();
   } else {
-    playSfx('lock');
-    alert(`Question voided (0 Pts). ${t.asker} will now set a brand-new question for ${guesser.name}!`);
-    prepAskerGate();
+    // Void & Re-ask same player with a new question
+    playSfx("chime");
+    alert("Question voided (0 Pts). Questioner must now set a brand new question for the same guesser!");
+    prepareAskPhase();
   }
 }
 
 function advanceTurn() {
-  state.turnIdx++;
-  if (state.turnIdx >= state.turns.length) {
-    hideAllViews();
-    playSfx('win');
-    renderLeaderboard(true);
-    document.getElementById('newMatchBtn').classList.remove('hidden');
-  } else {
-    prepAskerGate();
-  }
+  currentTurnIdx++;
+  prepareAskPhase();
+}
+
+function finishMatch() {
+  hideAllPhases();
+  renderLeaderboard(true);
+  document.getElementById("playAgainBtn").classList.remove("hidden");
+  playSfx("win");
 }
 
 function renderLeaderboard(isFinal = false) {
-  const sorted = [...state.players].sort((a, b) => b.score - a.score || a.totalTime - b.totalTime);
-  const list = document.getElementById('leaderboardList');
-  list.innerHTML = sorted.map((p, i) => `
-    <div class="leader-row" style="${i === 0 ? 'border-color:var(--accent);' : ''}">
-      <div>
-        <strong>${i === 0 ? '👑 ' : '#' + (i + 1) + ' '}${p.name}</strong>
-        <div style="font-size:0.76rem;color:var(--muted);">Total Answer Time: ${p.totalTime}s</div>
-      </div>
-      <div style="font-size:1.15rem;font-weight:900;color:var(--accent);">${p.score} pts</div>
+  const sorted = [...players].sort((a, b) => (b.score - a.score) || (a.totalTime - b.totalTime));
+  const list = document.getElementById("leaderboardList");
+  list.innerHTML = sorted.map((p, idx) => `
+    <div class="leader-row">
+      <span>${idx === 0 && isFinal ? "👑 WINNER: " : `#${idx + 1} `}${p.name}</span>
+      <span>${p.score} pts <small style="color:var(--muted);">(${p.totalTime}s)</small></span>
     </div>
-  `).join('');
-  if (isFinal && sorted.length > 0) {
-    list.insertAdjacentHTML('afterbegin', `<div style="text-align:center;padding:10px;margin-bottom:10px;background:rgba(245,158,11,0.15);border-radius:12px;font-weight:900;color:var(--accent);">🏆 CHAMPION: ${sorted[0].name} (${sorted[0].score} Pts)!</div>`);
-  }
+  `).join("");
 }
 
-function resetToSetup() {
-  hideAllViews();
-  document.getElementById('leaderboardCard').classList.add('hidden');
-  document.getElementById('setupView').classList.remove('hidden');
+function hideAllPhases() {
+  ["askScreen", "handoffScreen", "guessScreen", "reviewScreen", "resultScreen"].forEach(id => {
+    document.getElementById(id).classList.add("hidden");
+  });
 }
+
+// Init on Load
+renderNameInputs();
+const savedLink = localStorage.getItem("ds_creator_link");
+if (savedLink) document.getElementById("creatorPayLink").value = savedLink;
+startIntro();
 </script>
 </body>
 </html>
