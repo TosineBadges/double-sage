@@ -2,572 +2,435 @@ import os
 import time
 import random
 import string
-from flask import Flask, request, jsonify, send_from_directory, render_template_string
+import threading
+from flask import Flask, request, jsonify, render_template_string, send_from_directory
 
 app = Flask(__name__)
 
+# Render Free-Tier Memory Guard
 ROOMS = {}
-ROOM_TTL_SECONDS = 7200
+ROOMS_LOCK = threading.Lock()
+ROOM_TTL = 7200  # 2 hours
 MAX_ROOMS = 250
+
 
 def cleanup_rooms():
     now = time.time()
-    expired = [code for code, r in ROOMS.items() if now - r.get("updated_at", r.get("created_at", now)) > ROOM_TTL_SECONDS]
-    for code in expired:
-        ROOMS.pop(code, None)
-    if len(ROOMS) > MAX_ROOMS:
-        oldest = sorted(ROOMS.items(), key=lambda x: x[1].get("updated_at", 0))[:len(ROOMS) - MAX_ROOMS]
-        for code, _ in oldest:
-            ROOMS.pop(code, None)
+    with ROOMS_LOCK:
+        expired = [c for c, r in ROOMS.items() if now - r.get("updated_at", now) > ROOM_TTL]
+        for c in expired:
+            del ROOMS[c]
+        if len(ROOMS) > MAX_ROOMS:
+            oldest = sorted(ROOMS.items(), key=lambda x: x[1].get("updated_at", 0))[: len(ROOMS) - MAX_ROOMS]
+            for c, _ in oldest:
+                del ROOMS[c]
 
-def make_room_code():
+
+def make_code():
     chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
     for _ in range(50):
-        code = "".join(random.choices(chars, k=4))
+        code = "".join(random.choice(chars) for _ in range(4))
         if code not in ROOMS:
             return code
-    return "".join(random.choices(chars, k=4))
+    return "".join(random.choice(chars) for _ in range(5))
+
+
+def build_hint(answer: str) -> str:
+    ans = (answer or "").strip()
+    if not ans:
+        return ""
+    words = [w for w in ans.split() if w]
+    letters = sum(1 for ch in ans if ch.isalpha())
+    digits = sum(1 for ch in ans if ch.isdigit())
+    parts = []
+    if letters > 0:
+        parts.append(f"{len(words)} {'word' if len(words) == 1 else 'words'}")
+        parts.append(f"{letters} {'letter' if letters == 1 else 'letters'}")
+    if digits > 0:
+        parts.append(f"{digits} {'digit' if digits == 1 else 'digits'}")
+    if not parts:
+        parts.append(f"{len(words)} {'word' if len(words) == 1 else 'words'}")
+    return ", ".join(parts)
+
+
+@app.route("/media/<path:filename>")
+def serve_media(filename):
+    for folder in [".", "static", "assets", "media"]:
+        path = os.path.join(folder, filename)
+        if os.path.isfile(path):
+            return send_from_directory(folder, filename)
+    return ("Not found", 404)
+
+
+@app.route("/api/room/create", methods=["POST"])
+def create_room():
+    cleanup_rooms()
+    data = request.get_json(silent=True) or {}
+    name = (data.get("name") or "Host").strip()[:24]
+    mode = data.get("mode") or "standard"
+    rounds = max(1, min(30, int(data.get("rounds") or 5)))
+    timer_sec = max(10, min(180, int(data.get("timer") or 30)))
+    pid = "p_" + "".join(random.choices(string.ascii_lowercase + string.digits, k=8))
+    with ROOMS_LOCK:
+        code = make_code()
+        ROOMS[code] = {
+            "code": code,
+            "host_id": pid,
+            "mode": mode,
+            "total_rounds": rounds,
+            "timer_sec": timer_sec,
+            "phase": "lobby",
+            "round": 1,
+            "setter_idx": 0,
+            "players": [
+                {"id": pid, "name": name, "score": 0, "total_time": 0.0}
+            ],
+            "question": "",
+            "answer": "",
+            "hint": "",
+            "guess": "",
+            "guess_time": 0.0,
+            "ruling": None,
+            "contested": False,
+            "winner_awarded": None,
+            "updated_at": time.time(),
+        }
+    return jsonify({"ok": True, "code": code, "player_id": pid, "room": sanitize_room(ROOMS[code], pid)})
+
+
+@app.route("/api/room/join", methods=["POST"])
+def join_room():
+    cleanup_rooms()
+    data = request.get_json(silent=True) or {}
+    code = (data.get("code") or "").strip().upper()
+    name = (data.get("name") or "Player").strip()[:24]
+    with ROOMS_LOCK:
+        room = ROOMS.get(code)
+        if not room:
+            return jsonify({"ok": False, "error": "Room not found."}), 404
+        if len(room["players"]) >= 12:
+            return jsonify({"ok": False, "error": "Room is full."}), 400
+        pid = "p_" + "".join(random.choices(string.ascii_lowercase + string.digits, k=8))
+        room["players"].append({"id": pid, "name": name, "score": 0, "total_time": 0.0})
+        room["updated_at"] = time.time()
+        return jsonify({"ok": True, "code": code, "player_id": pid, "room": sanitize_room(room, pid)})
+
+
+@app.route("/api/room/state", methods=["GET"])
+def room_state():
+    code = (request.args.get("code") or "").strip().upper()
+    pid = request.args.get("pid") or ""
+    with ROOMS_LOCK:
+        room = ROOMS.get(code)
+        if not room:
+            return jsonify({"ok": False, "error": "Room expired or not found."}), 404
+        if not any(p["id"] == pid for p in room["players"]):
+            return jsonify({"ok": False, "kicked": True, "error": "You were removed from the room."}), 403
+        return jsonify({"ok": True, "room": sanitize_room(room, pid)})
+
+
+@app.route("/api/room/action", methods=["POST"])
+def room_action():
+    data = request.get_json(silent=True) or {}
+    code = (data.get("code") or "").strip().upper()
+    pid = data.get("pid") or ""
+    action = data.get("action") or ""
+    with ROOMS_LOCK:
+        room = ROOMS.get(code)
+        if not room:
+            return jsonify({"ok": False, "error": "Room not found."}), 404
+        players = room["players"]
+        if not any(p["id"] == pid for p in players):
+            return jsonify({"ok": False, "error": "Not in room."}), 403
+        setter = players[room["setter_idx"] % len(players)]
+        guesser = players[(room["setter_idx"] + 1) % len(players)] if len(players) > 1 else setter
+
+        if action == "kick" and pid == room["host_id"]:
+            target = data.get("target_id")
+            if target and target != pid:
+                room["players"] = [p for p in players if p["id"] != target]
+        elif action == "start" and pid == room["host_id"]:
+            if len(players) < 2:
+                return jsonify({"ok": False, "error": "Need at least 2 players."}), 400
+            for p in players:
+                p["score"] = 0
+                p["total_time"] = 0.0
+            room["round"] = 1
+            room["setter_idx"] = 0
+            room["phase"] = "set_question"
+            room["question"] = ""
+            room["answer"] = ""
+            room["hint"] = ""
+            room["guess"] = ""
+            room["ruling"] = None
+            room["contested"] = False
+            room["winner_awarded"] = None
+        elif action == "set_question" and pid == setter["id"]:
+            q = (data.get("question") or "").strip()
+            a = (data.get("answer") or "").strip()
+            if not q or not a:
+                return jsonify({"ok": False, "error": "Question and answer required."}), 400
+            room["question"] = q
+            room["answer"] = a
+            room["hint"] = build_hint(a)
+            room["guess"] = ""
+            room["ruling"] = None
+            room["contested"] = False
+            room["winner_awarded"] = None
+            room["phase"] = "guessing"
+        elif action == "submit_guess" and pid == guesser["id"] and room["phase"] == "guessing":
+            g = (data.get("guess") or "").strip()
+            elapsed = max(0.0, float(data.get("elapsed") or 0.0))
+            room["guess"] = g
+            room["guess_time"] = round(elapsed, 2)
+            guesser["total_time"] = round(guesser["total_time"] + elapsed, 2)
+            if room["mode"] == "umpire":
+                room["phase"] = "umpire_review"
+            else:
+                matched = g.lower() == room["answer"].strip().lower()
+                if matched:
+                    guesser["score"] += 5
+                    room["winner_awarded"] = "guesser"
+                    room["ruling"] = "Guesser matched the answer! (+5 pts)"
+                else:
+                    setter["score"] += 5
+                    room["winner_awarded"] = "setter"
+                    room["ruling"] = "Did not match exact answer — Setter awarded +5 pts."
+                room["phase"] = "review"
+        elif action == "contest" and pid == guesser["id"] and room["phase"] == "review" and room["mode"] != "umpire":
+            if room["winner_awarded"] == "setter" and not room["contested"]:
+                room["contested"] = True
+                room["phase"] = "contested"
+        elif action == "resolve_contest" and pid == setter["id"] and room["phase"] == "contested":
+            accept = bool(data.get("accept"))
+            if accept and room["winner_awarded"] == "setter":
+                setter["score"] = max(0, setter["score"] - 5)
+                guesser["score"] += 5
+                room["winner_awarded"] = "guesser"
+                room["ruling"] = "Setter accepted contest! +5 pts transferred to Guesser."
+            else:
+                room["ruling"] = "Setter rejected contest — Setter keeps +5 pts."
+            room["phase"] = "review"
+        elif action == "umpire_rule" and pid == room["host_id"] and room["phase"] == "umpire_review":
+            winner = data.get("winner")
+            if winner == "guesser":
+                guesser["score"] += 5
+                room["winner_awarded"] = "guesser"
+                room["ruling"] = "Umpire final ruling: Guesser wins +5 pts."
+            else:
+                setter["score"] += 5
+                room["winner_awarded"] = "setter"
+                room["ruling"] = "Umpire final ruling: Setter wins +5 pts."
+            room["phase"] = "review"
+        elif action == "next_round" and pid in (room["host_id"], setter["id"]) and room["phase"] == "review":
+            if room["round"] >= room["total_rounds"]:
+                room["phase"] = "gameover"
+            else:
+                room["round"] += 1
+                room["setter_idx"] = (room["setter_idx"] + 1) % len(players)
+                room["phase"] = "set_question"
+                room["question"] = ""
+                room["answer"] = ""
+                room["hint"] = ""
+                room["guess"] = ""
+                room["ruling"] = None
+                room["contested"] = False
+                room["winner_awarded"] = None
+        room["updated_at"] = time.time()
+        return jsonify({"ok": True, "room": sanitize_room(room, pid)})
+
+
+def sanitize_room(room, pid):
+    players = room["players"]
+    setter = players[room["setter_idx"] % len(players)] if players else None
+    guesser = players[(room["setter_idx"] + 1) % len(players)] if len(players) > 1 else setter
+    reveal_ans = (
+        room["phase"] in ("review", "contested", "umpire_review", "gameover")
+        or (setter and pid == setter["id"])
+        or (room["mode"] == "umpire" and pid == room["host_id"])
+    )
+    return {
+        "code": room["code"],
+        "host_id": room["host_id"],
+        "mode": room["mode"],
+        "total_rounds": room["total_rounds"],
+        "timer_sec": room["timer_sec"],
+        "phase": room["phase"],
+        "round": room["round"],
+        "players": players,
+        "setter_id": setter["id"] if setter else "",
+        "setter_name": setter["name"] if setter else "",
+        "guesser_id": guesser["id"] if guesser else "",
+        "guesser_name": guesser["name"] if guesser else "",
+        "question": room["question"],
+        "answer": room["answer"] if reveal_ans else "",
+        "hint": room["hint"],
+        "guess": room["guess"],
+        "guess_time": room["guess_time"],
+        "ruling": room["ruling"],
+        "contested": room["contested"],
+        "winner_awarded": room["winner_awarded"],
+    }
+
 
 HTML_PAGE = """<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Double Sage — Online Multiplayer Duel</title>
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Double Sage — Online Multiplayer</title>
 <style>
-  :root {
-    --bg: #070b14;
-    --card: #0f172a;
-    --card2: #1e293b;
-    --border: #334155;
-    --accent: #38bdf8;
-    --gold: #f59e0b;
-    --green: #10b981;
-    --red: #ef4444;
-    --purple: #a855f7;
-    --text: #f8fafc;
-    --muted: #94a3b8;
-  }
-  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-  body {
-    margin: 0;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-    background: radial-gradient(circle at top, #111c33 0%, var(--bg) 70%);
-    color: var(--text);
-    min-height: 100vh;
-    padding-bottom: 40px;
-  }
-  /* Intro Splash */
-  #introOverlay {
-    position: fixed;
-    inset: 0;
-    z-index: 99990;
-    background: #050811;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    padding: 20px;
-    text-align: center;
-  }
-  #introSlideImg {
-    width: 100%;
-    max-width: 440px;
-    max-height: 52vh;
-    object-fit: contain;
-    border-radius: 18px;
-    border: 2px solid rgba(56, 189, 248, 0.45);
-    box-shadow: 0 18px 50px rgba(0, 0, 0, 0.75);
-    background: #0b1220;
-    margin-bottom: 14px;
-  }
-  #introCaption {
-    font-size: 1.05rem;
-    font-weight: 700;
-    color: var(--accent);
-    margin-bottom: 10px;
-    letter-spacing: 0.4px;
-  }
-  .intro-bar-wrap {
-    width: 100%;
-    max-width: 340px;
-    height: 8px;
-    background: #1e293b;
-    border-radius: 999px;
-    overflow: hidden;
-    margin-bottom: 18px;
-  }
-  #introBarFill {
-    height: 100%;
-    width: 0%;
-    background: linear-gradient(90deg, var(--accent), var(--gold));
-    transition: width 0.1s linear;
-  }
-  .intro-actions {
-    display: flex;
-    gap: 12px;
-    flex-wrap: wrap;
-    justify-content: center;
-    position: relative;
-    z-index: 999999;
-  }
-  #introOverlay button {
-    position: relative;
-    z-index: 999999 !important;
-    pointer-events: auto !important;
-    cursor: pointer;
-    border: none;
-    border-radius: 999px;
-    padding: 12px 22px;
-    font-weight: 800;
-    font-size: 0.95rem;
-  }
-  .btn-sound-hero {
-    background: linear-gradient(135deg, var(--green), #059669);
-    color: #fff;
-    box-shadow: 0 6px 20px rgba(16, 185, 129, 0.4);
-  }
-  .btn-skip-hero {
-    background: var(--card2);
-    color: #fff;
-    border: 1.5px solid var(--accent) !important;
-  }
-
-  /* Top Audio & Brand Bar */
-  .topbar {
-    position: sticky;
-    top: 0;
-    z-index: 500;
-    background: rgba(7, 11, 20, 0.94);
-    backdrop-filter: blur(10px);
-    border-bottom: 1px solid var(--border);
-    padding: 10px 14px;
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    justify-content: space-between;
-    gap: 8px;
-  }
-  .brand {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-weight: 900;
-    font-size: 1.05rem;
-    color: var(--accent);
-  }
-  .brand img {
-    width: 30px;
-    height: 30px;
-    border-radius: 8px;
-    object-fit: cover;
-    border: 1px solid var(--accent);
-  }
-  .audio-bar {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 6px;
-  }
-  .pill-btn {
-    background: var(--card2);
-    color: var(--text);
-    border: 1px solid var(--border);
-    border-radius: 999px;
-    padding: 6px 11px;
-    font-size: 0.78rem;
-    font-weight: 700;
-    cursor: pointer;
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-  }
-  .pill-btn.active {
-    border-color: var(--accent);
-    color: var(--accent);
-  }
-  .pill-btn.reset-theme {
-    border-color: var(--gold);
-    color: var(--gold);
-    display: none;
-  }
-  .vol-wrap {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    background: var(--card2);
-    border: 1px solid var(--border);
-    border-radius: 999px;
-    padding: 4px 10px;
-    font-size: 0.75rem;
-  }
-  .vol-wrap input[type="range"] {
-    width: 68px;
-    accent-color: var(--accent);
-  }
-
-  /* Layout */
-  .container {
-    max-width: 680px;
-    margin: 0 auto;
-    padding: 14px;
-  }
-  .card {
-    background: var(--card);
-    border: 1px solid var(--border);
-    border-radius: 16px;
-    padding: 16px;
-    margin-bottom: 14px;
-    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.35);
-  }
-  h2, h3 {
-    margin: 0 0 10px 0;
-    font-size: 1.1rem;
-  }
-  .sub {
-    color: var(--muted);
-    font-size: 0.86rem;
-    margin-bottom: 12px;
-    line-height: 1.4;
-  }
-  input[type="text"], input[type="number"], textarea, select {
-    width: 100%;
-    background: #090f1d;
-    color: var(--text);
-    border: 1.5px solid var(--border);
-    border-radius: 12px;
-    padding: 11px 12px;
-    font-size: 0.95rem;
-    margin-bottom: 10px;
-    font-family: inherit;
-  }
-  input:focus, textarea:focus, select:focus {
-    outline: none;
-    border-color: var(--accent);
-  }
-  .btn {
-    width: 100%;
-    border: none;
-    border-radius: 12px;
-    padding: 12px 16px;
-    font-size: 0.95rem;
-    font-weight: 800;
-    cursor: pointer;
-    margin-bottom: 8px;
-    transition: transform 0.08s ease, opacity 0.15s ease;
-  }
-  .btn:active { transform: scale(0.98); }
-  .btn-primary { background: linear-gradient(135deg, #0284c7, var(--accent)); color: #04101f; }
-  .btn-green { background: linear-gradient(135deg, #059669, var(--green)); color: #fff; }
-  .btn-gold { background: linear-gradient(135deg, #d97706, var(--gold)); color: #090d16; }
-  .btn-red { background: linear-gradient(135deg, #dc2626, var(--red)); color: #fff; }
-  .btn-purple { background: linear-gradient(135deg, #7e22ce, var(--purple)); color: #fff; }
-  .btn-ghost { background: var(--card2); color: var(--text); border: 1px solid var(--border); }
-  .btn-sm { width: auto; padding: 7px 12px; font-size: 0.8rem; margin-bottom: 0; }
-  .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
-  .row > * { flex: 1; }
-  .badge {
-    display: inline-block;
-    padding: 4px 10px;
-    border-radius: 999px;
-    font-size: 0.76rem;
-    font-weight: 800;
-    background: rgba(56, 189, 248, 0.15);
-    color: var(--accent);
-    border: 1px solid rgba(56, 189, 248, 0.35);
-  }
-  .badge-gold {
-    background: rgba(245, 158, 11, 0.15);
-    color: var(--gold);
-    border-color: rgba(245, 158, 11, 0.35);
-  }
-  .player-item {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    background: var(--card2);
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    padding: 10px 12px;
-    margin-bottom: 8px;
-  }
-  .timer-box {
-    font-size: 2rem;
-    font-weight: 900;
-    text-align: center;
-    color: var(--gold);
-    background: #090f1d;
-    border: 1.5px solid var(--gold);
-    border-radius: 14px;
-    padding: 10px;
-    margin: 10px 0;
-  }
-  .prompt-chip {
-    background: var(--card2);
-    border: 1px solid var(--border);
-    color: var(--text);
-    border-radius: 10px;
-    padding: 7px 10px;
-    font-size: 0.8rem;
-    cursor: pointer;
-    text-align: left;
-  }
-  .prompt-chip:hover { border-color: var(--accent); }
-  .qb-item {
-    background: #090f1d;
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    padding: 10px;
-    margin-bottom: 8px;
-  }
-  .hidden { display: none !important; }
-  .toast {
-    position: fixed;
-    bottom: 18px;
-    left: 50%;
-    transform: translateX(-50%);
-    background: #1e293b;
-    color: #fff;
-    border: 1px solid var(--accent);
-    padding: 10px 18px;
-    border-radius: 999px;
-    font-size: 0.85rem;
-    font-weight: 700;
-    z-index: 999999;
-    box-shadow: 0 10px 30px rgba(0,0,0,0.6);
-  }
+*{box-sizing:border-box;margin:0;padding:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+body{background:#070b14;color:#f1f5f9;min-height:100vh;padding:14px}
+.wrap{max-width:720px;margin:0 auto}
+.topbar{display:flex;flex-wrap:wrap;gap:6px;align-items:center;justify-content:space-between;background:#0f172a;border:1px solid #1e293b;padding:10px 12px;border-radius:14px;margin-bottom:14px}
+.brand{font-weight:800;font-size:18px;color:#38bdf8}
+.btn{background:#1e293b;color:#f8fafc;border:1px solid #334155;padding:7px 12px;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer}
+.btn-primary{background:linear-gradient(135deg,#0284c7,#2563eb);border:none;color:#fff}
+.btn-green{background:#16a34a;border:none;color:#fff}
+.btn-red{background:#dc2626;border:none;color:#fff}
+.btn-amber{background:#d97706;border:none;color:#fff}
+.card{background:#0f172a;border:1px solid #1e293b;border-radius:16px;padding:16px;margin-bottom:14px}
+h2{font-size:17px;margin-bottom:10px;color:#38bdf8}
+input,select,textarea{width:100%;background:#020617;color:#f8fafc;border:1px solid #334155;border-radius:10px;padding:10px;font-size:14px;margin-bottom:10px}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.pill{display:inline-block;background:#1e293b;color:#38bdf8;padding:4px 10px;border-radius:999px;font-size:12px;font-weight:700}
+.hint-box{background:#0c4a6e;border:1px solid #0284c7;color:#e0f2fe;padding:10px 12px;border-radius:10px;font-weight:700;margin:8px 0}
+#introOverlay{position:fixed;inset:0;z-index:99990;background:#070b14;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px;text-align:center}
+#introImg{max-width:340px;width:85%;max-height:52vh;object-fit:contain;border-radius:18px;border:2px solid #38bdf8;margin-bottom:16px}
+.skip-btn{position:relative;z-index:999999 !important;pointer-events:auto !important;background:#ef4444;color:#fff;border:none;padding:11px 20px;border-radius:999px;font-weight:800;font-size:15px;cursor:pointer}
+.player-item{display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:#020617;border-radius:10px;margin-bottom:6px}
+.modal{display:none;position:fixed;inset:0;z-index:9990;background:rgba(2,6,23,.88);padding:16px;overflow-y:auto}
+.modal-inner{max-width:600px;margin:20px auto;background:#0f172a;border:1px solid #334155;border-radius:16px;padding:16px}
 </style>
 </head>
 <body>
 
-<!-- 4-Slide 3-Second Intro Splash -->
 <div id="introOverlay">
-  <img id="introSlideImg" src="/media/double_sage_icon.jpg" alt="Double Sage" onerror="this.style.display='none'">
-  <div id="introCaption">DOUBLE SAGE — MIND DUEL ARENA</div>
-  <div class="intro-bar-wrap"><div id="introBarFill"></div></div>
-  <div class="intro-actions">
-    <button type="button" class="btn-sound-hero" onclick="enableLoudAudioAndNext()">🔊 Enable Loud Sound & Music</button>
-    <button type="button" class="btn-skip-hero" onclick="forceCloseIntro()">Skip Intro ⏭</button>
+  <img id="introImg" src="/media/double_sage_icon.jpg" alt="Double Sage">
+  <div id="introCaption" style="font-size:18px;font-weight:800;color:#38bdf8;margin-bottom:14px">DOUBLE SAGE ARENA</div>
+  <div class="row" style="justify-content:center">
+    <button type="button" class="btn btn-primary" onclick="unlockAudio()">🔊 Enable Sound</button>
+    <button type="button" class="skip-btn" onclick="forceCloseIntro()">Skip Intro ⏭</button>
   </div>
 </div>
 
-<!-- Sticky Top Bar -->
-<div class="topbar">
-  <div class="brand">
-    <img src="/media/double_sage_icon.jpg" alt="Logo" onerror="this.style.display='none'">
-    <span>DOUBLE SAGE</span>
-  </div>
-  <div class="audio-bar">
-    <button type="button" id="btnMusic" class="pill-btn active" onclick="toggleMusic()">🎵 Music: ON</button>
-    <button type="button" id="btnSfx" class="pill-btn active" onclick="toggleSfx()">🔊 SFX: ON</button>
-    <label class="pill-btn" style="cursor:pointer;">
-      📂 Load Song
-      <input type="file" id="customSongInput" accept="audio/*" style="display:none;" onchange="loadLocalSong(event)">
-    </label>
-    <button type="button" id="resetThemeBtn" class="pill-btn reset-theme" onclick="resetToDefaultTheme()">🔄 Default Theme</button>
-    <div class="vol-wrap">
-      <span>🔉</span>
-      <input type="range" id="volSlider" min="0" max="1" step="0.05" value="0.9" oninput="setMasterVolume(this.value)">
-    </div>
-    <button type="button" class="pill-btn" onclick="replayIntro()">🎬 Intro</button>
-  </div>
-</div>
-
-<audio id="themeAudio" src="/media/theme.mp3" loop preload="auto"></audio>
-
-<div class="container">
-
-  <!-- LOBBY / WELCOME VIEW -->
-  <div id="viewWelcome">
-    <div class="card">
-      <h2>⚔️ Enter Online Multiplayer Arena</h2>
-      <p class="sub">Play across separate phones in real time! Create a 4-letter room or join a friend's invite link.</p>
-      <input type="text" id="playerNameInput" placeholder="Enter your player name (e.g., SageKing)" maxlength="20">
-      <div class="row">
-        <button type="button" class="btn btn-primary" onclick="createRoom()">➕ Create Online Room</button>
-      </div>
-      <div style="margin: 10px 0; text-align:center; color:var(--muted); font-size:0.8rem;">— OR JOIN EXISTING ROOM —</div>
-      <div class="row">
-        <input type="text" id="joinCodeInput" placeholder="4-Letter Code" maxlength="4" style="text-transform:uppercase; margin-bottom:0;">
-        <button type="button" class="btn btn-green btn-sm" style="padding:12px 18px;" onclick="joinRoom()">🚪 Join Room</button>
-      </div>
-    </div>
-
-    <!-- Creator Monetization & Tournaments Hub -->
-    <div class="card">
-      <div class="row" style="justify-content:space-between; margin-bottom:8px;">
-        <h3 style="margin:0;">🏆 Live Tournaments & Creator Hub</h3>
-        <span class="badge badge-gold">Creator Tools</span>
-      </div>
-      <p class="sub">Pin your Paystack, Selar, or Flutterwave payment link for weekend tournament tickets or fan support tips.</p>
-      <div id="creatorLinkDisplay" class="hidden" style="margin-bottom:10px;">
-        <a id="creatorPayAnchor" href="#" target="_blank" rel="noopener" class="btn btn-gold" style="display:block; text-align:center; text-decoration:none;">🎟️ Buy Tournament Ticket / ☕ Support Creator</a>
-      </div>
-      <div class="row">
-        <input type="text" id="creatorUrlInput" placeholder="https://selar.co/your-link or Paystack URL" style="margin-bottom:0;">
-        <button type="button" class="btn btn-ghost btn-sm" style="padding:11px 14px;" onclick="saveCreatorLink()">💾 Save Link</button>
-      </div>
-    </div>
-
-    <!-- Saved Question Banks & Pro QB Pack Unlocker -->
-    <div class="card">
-      <div class="row" style="justify-content:space-between; margin-bottom:8px;">
-        <h3 style="margin:0;">📚 My QB's & 🎟️ Pro Pack Unlocker</h3>
-        <span class="badge" id="qbCountBadge">0 Saved</span>
-      </div>
-      <p class="sub">Unlock curated Question Bank packs (try starter codes <b>NAIJA2026</b>, <b>FOOTYPRO</b>, <b>PARTYVIP</b>) or save your own questions so you never have to retype during a match.</p>
-      <div class="row" style="margin-bottom:10px;">
-        <input type="text" id="packCodeInput" placeholder="Enter Pack Code or DSPACK:..." style="margin-bottom:0;">
-        <button type="button" class="btn btn-purple btn-sm" style="padding:11px 14px;" onclick="redeemPackCode()">🔓 Unlock</button>
-      </div>
-      <div class="row" style="margin-bottom:10px;">
-        <button type="button" class="btn btn-ghost btn-sm" onclick="toggleQbDrawer()">📂 Manage My QB's</button>
-        <button type="button" class="btn btn-gold btn-sm" onclick="exportSellablePack()">📤 Export Sellable Code (DSPACK)</button>
-      </div>
-      <div id="qbDrawer" class="hidden" style="margin-top:10px; border-top:1px solid var(--border); padding-top:10px;">
-        <input type="text" id="newQbQuestion" placeholder="Question prompt (e.g., How many states are in Nigeria?)">
-        <input type="text" id="newQbAnswer" placeholder="Exact Answer (e.g., 36)">
-        <button type="button" class="btn btn-green btn-sm" onclick="addCustomQb()">➕ Save to My QB's</button>
-        <div id="qbListContainer" style="margin-top:10px;"></div>
-      </div>
+<div class="wrap">
+  <div class="topbar">
+    <span class="brand">⚡ DOUBLE SAGE</span>
+    <div class="row">
+      <button type="button" class="btn" id="musicBtn" onclick="toggleMusic()">🎵 Music: ON</button>
+      <button type="button" class="btn" id="sfxBtn" onclick="toggleSfx()">🔊 SFX: ON</button>
+      <input type="range" id="volSlider" min="0" max="1" step="0.05" value="0.9" style="width:70px;margin:0" oninput="setVol(this.value)">
+      <label class="btn" style="margin:0">📂 Load Song<input type="file" id="songPicker" accept="audio/*" style="display:none" onchange="loadCustomSong(this)"></label>
+      <button type="button" class="btn" id="resetThemeBtn" style="display:none;color:#38bdf8;border-color:#38bdf8" onclick="resetTheme()">🔄 Default Theme</button>
+      <button type="button" class="btn" onclick="openQbModal()">📚 My QB's</button>
     </div>
   </div>
 
-  <!-- ACTIVE ROOM VIEW -->
-  <div id="viewRoom" class="hidden">
+  <div id="homeView">
     <div class="card">
-      <div class="row" style="justify-content:space-between; margin-bottom:8px;">
+      <h2>Create Online Room</h2>
+      <input id="hostName" placeholder="Your Name (e.g. SageKing)">
+      <div class="row">
+        <select id="gameMode" style="flex:1">
+          <option value="standard">Standard Mode (Contest & Approval)</option>
+          <option value="umpire">Umpire Mode (Host Final Ruling)</option>
+        </select>
+        <input id="roundCount" type="number" value="5" min="1" max="30" style="width:90px" title="Rounds">
+        <input id="timerSec" type="number" value="30" min="10" max="180" style="width:90px" title="Seconds">
+      </div>
+      <button type="button" class="btn btn-primary" style="width:100%" onclick="createRoom()">🚀 Create Multiplayer Room</button>
+    </div>
+
+    <div class="card">
+      <h2>Join Room</h2>
+      <div class="row">
+        <input id="joinName" placeholder="Your Name" style="flex:1">
+        <input id="joinCode" placeholder="4-Letter Code" maxlength="5" style="width:140px;text-transform:uppercase">
+      </div>
+      <button type="button" class="btn btn-green" style="width:100%" onclick="joinRoom()">🎮 Join Room</button>
+    </div>
+
+    <div class="card">
+      <h2>🏆 Live Tournaments & Creator Hub</h2>
+      <div class="row" style="margin-bottom:8px">
+        <input id="creatorLinkInput" placeholder="Paste Paystack / Selar / Flutterwave Link" style="flex:1;margin:0">
+        <button type="button" class="btn btn-amber" onclick="saveCreatorLink()">Save Link</button>
+      </div>
+      <a id="creatorPayBtn" href="#" target="_blank" style="display:none;text-decoration:none">
+        <button type="button" class="btn btn-green" style="width:100%">🎟️ Buy Tournament Ticket / ☕ Support Creator</button>
+      </a>
+    </div>
+  </div>
+
+  <div id="roomView" style="display:none">
+    <div class="card">
+      <div class="row" style="justify-content:space-between;margin-bottom:10px">
         <div>
-          <span class="badge" id="roomCodeBadge">ROOM: ----</span>
-          <span class="badge badge-gold" id="modeBadge">Standard Mode</span>
+          <span class="pill" id="roomCodeBadge">ROOM: ----</span>
+          <span class="pill" id="roundBadge">Round 1/5</span>
+          <span class="pill" id="modeBadge">Standard</span>
         </div>
-        <button type="button" class="btn btn-ghost btn-sm" onclick="copyInviteLink()">🔗 Copy Invite Link</button>
+        <button type="button" class="btn" onclick="copyInvite()">🔗 Copy Invite Link</button>
       </div>
-
-      <div id="hostSettingsBox" class="hidden" style="background:#090f1d; border:1px solid var(--border); border-radius:12px; padding:10px; margin-bottom:10px;">
-        <div class="row" style="margin-bottom:8px;">
-          <label style="font-size:0.82rem; color:var(--muted);">Ruling Mode:
-            <select id="umpireSelect" onchange="updateSettings()" style="margin-top:4px; margin-bottom:0;">
-              <option value="standard">Standard Contest & Approval</option>
-              <option value="umpire">Umpire Mode (Final Ruling — No Contest)</option>
-            </select>
-          </label>
-          <label style="font-size:0.82rem; color:var(--muted);">Target Points:
-            <select id="targetPtsSelect" onchange="updateSettings()" style="margin-top:4px; margin-bottom:0;">
-              <option value="15">15 Points</option>
-              <option value="25" selected>25 Points</option>
-              <option value="50">50 Points</option>
-            </select>
-          </label>
-        </div>
-        <button type="button" class="btn btn-green" onclick="startMatch()">🚀 Start Match</button>
-      </div>
-
-      <h3>👥 Players & Leaderboard</h3>
-      <div id="playersList"></div>
-      <button type="button" class="btn btn-red btn-sm" onclick="leaveRoom()">🚪 Leave Room</button>
+      <div id="playerList"></div>
+      <div id="lobbyControls" style="margin-top:10px"></div>
     </div>
 
-    <!-- GAMEPLAY STAGE -->
-    <div id="gameStageCard" class="card hidden">
-      <div class="row" style="justify-content:space-between; margin-bottom:6px;">
-        <span class="badge" id="roundBadge">Round 1</span>
-        <span class="badge badge-gold" id="roleBadge">Role</span>
-      </div>
-      <div id="countdownTimer" class="timer-box hidden">30s</div>
-      <div id="stageContent"></div>
-    </div>
+    <div class="card" id="stageCard"></div>
   </div>
-
 </div>
 
-<div id="toastBox" class="toast hidden"></div>
+<div id="qbModal" class="modal">
+  <div class="modal-inner">
+    <div class="row" style="justify-content:space-between;margin-bottom:10px">
+      <h2 style="margin:0">📚 My QB's & Pro Packs</h2>
+      <button type="button" class="btn btn-red" onclick="closeQbModal()">Close ✕</button>
+    </div>
+    <div class="row">
+      <input id="qbQuestion" placeholder="Type a question..." style="flex:1">
+      <button type="button" class="btn btn-amber" onclick="suggestAnswer('qbQuestion','qbAnswer','qbStatus')">✨ Suggest Answer</button>
+    </div>
+    <div id="qbStatus" style="font-size:12px;color:#94a3b8;margin-bottom:6px"></div>
+    <input id="qbAnswer" placeholder="Secret Answer">
+    <button type="button" class="btn btn-primary" style="width:100%;margin-bottom:12px" onclick="saveQbItem()">➕ Save to My QB's</button>
+
+    <div class="row" style="margin-bottom:10px">
+      <input id="packCodeInput" placeholder="Enter Pro Pack Code (e.g. NAIJA2026, FOOTYPRO, PARTYVIP)" style="flex:1;margin:0">
+      <button type="button" class="btn btn-green" onclick="redeemPack()">🎟️ Unlock</button>
+    </div>
+    <button type="button" class="btn" style="width:100%;margin-bottom:12px" onclick="exportQbPack()">📦 Export Sellable Code (DSPACK:...)</button>
+    <div id="qbList"></div>
+  </div>
+</div>
 
 <script>
-// ==================== INTRO SPLASH ENGINE ====================
-const INTRO_SLIDES = [
-  { img: "/media/double_sage_icon.jpg", text: "DOUBLE SAGE — MIND DUEL ARENA" },
-  { img: "/media/double_sage_battle.jpg", text: "OUTSMART • OUTGUESS • OUTPLAY" },
-  { img: "/media/double_sage_banner.jpg", text: "LIVE MULTIPLAYER & PASS-AND-PLAY" },
-  { img: "/media/double_sage_tournament.jpg", text: "TOURNAMENT READY — ENTER THE ARENA" }
+const SLIDES = [
+  {src:'/media/double_sage_icon.jpg', text:'DOUBLE SAGE ARENA'},
+  {src:'/media/double_sage_battle.jpg', text:'HEAD-TO-HEAD MIND DUELS'},
+  {src:'/media/double_sage_banner.jpg', text:'CUSTOM QB & LIVE TOURNAMENTS'},
+  {src:'/media/double_sage_tournament.jpg', text:'FASTEST MIND WINS'}
 ];
-let introIdx = 0;
-let introProgress = 0;
-window.introTimer = null;
+let slideIdx = 0;
+let introTimer = setInterval(() => {
+  slideIdx++;
+  if (slideIdx >= SLIDES.length) { forceCloseIntro(); return; }
+  const img = document.getElementById('introImg');
+  const cap = document.getElementById('introCaption');
+  if (img) img.src = SLIDES[slideIdx].src;
+  if (cap) cap.textContent = SLIDES[slideIdx].text;
+}, 3000);
 
-function startIntroSequence() {
-  const ov = document.getElementById("introOverlay");
-  if (!ov) return;
-  ov.style.display = "flex";
-  introIdx = 0;
-  introProgress = 0;
-  renderIntroSlide();
-  if (window.introTimer) clearInterval(window.introTimer);
-  window.introTimer = setInterval(() => {
-    introProgress += 100;
-    const pct = Math.min(100, (introProgress / 3000) * 100);
-    const fill = document.getElementById("introBarFill");
-    if (fill) fill.style.width = pct + "%";
-    if (introProgress >= 3000) {
-      introProgress = 0;
-      introIdx++;
-      if (introIdx >= INTRO_SLIDES.length) {
-        window.forceCloseIntro();
-      } else {
-        renderIntroSlide();
-      }
-    }
-  }, 100);
-}
-
-function renderIntroSlide() {
-  const s = INTRO_SLIDES[introIdx] || INTRO_SLIDES[0];
-  const img = document.getElementById("introSlideImg");
-  const cap = document.getElementById("introCaption");
-  const fill = document.getElementById("introBarFill");
-  if (img) {
-    img.style.display = "block";
-    img.src = s.img;
-  }
-  if (cap) cap.textContent = s.text;
-  if (fill) fill.style.width = "0%";
-}
-
-window.forceCloseIntro = function() {
-  if (window.introTimer) {
-    clearInterval(window.introTimer);
-    window.introTimer = null;
-  }
-  const ov = document.getElementById("introOverlay");
-  if (ov) ov.style.display = "none";
+function forceCloseIntro() {
+  if (introTimer) { clearInterval(introTimer); introTimer = null; }
+  const ov = document.getElementById('introOverlay');
+  if (ov) ov.remove();
   unlockAudio();
-};
-
-function replayIntro() {
-  startIntroSequence();
 }
 
-function enableLoudAudioAndNext() {
-  unlockAudio();
-  playSfx("ding");
-  showToast("🔊 Loud Sound & Music Enabled!");
-}
-
-// ==================== AUDIO & CUSTOM SONG ENGINE ====================
-let audioCtx = null;
-let masterGain = null;
-let synthTimer = null;
-let musicEnabled = true;
-let sfxEnabled = true;
-let masterVol = 0.9;
-let usingCustomLocalSong = false;
-let themeMp3Failed = false;
-
-const themeAudio = document.getElementById("themeAudio");
-themeAudio.addEventListener("error", () => {
-  themeMp3Failed = true;
-  if (musicEnabled && audioCtx && !synthTimer) startSynthLoop();
-});
+let audioCtx = null, masterGain = null, bgmTimer = null, themeAudio = null;
+let musicOn = true, sfxOn = true, masterVol = 0.9, usingCustomSong = false;
 
 function unlockAudio() {
   if (!audioCtx) {
@@ -575,830 +438,455 @@ function unlockAudio() {
     if (AC) {
       audioCtx = new AC();
       const comp = audioCtx.createDynamicsCompressor();
-      comp.threshold.value = -12;
-      comp.ratio.value = 8;
       masterGain = audioCtx.createGain();
       masterGain.gain.value = masterVol;
       comp.connect(masterGain);
       masterGain.connect(audioCtx.destination);
-      window._audioBus = comp;
+      window._out = comp;
     }
   }
-  if (audioCtx && audioCtx.state === "suspended") {
-    audioCtx.resume().catch(() => {});
-  }
-  if (musicEnabled) {
+  if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+  if (!themeAudio) {
+    themeAudio = new Audio('/media/theme.mp3');
+    themeAudio.loop = true;
     themeAudio.volume = masterVol;
-    if (!themeMp3Failed || usingCustomLocalSong) {
-      themeAudio.play().then(() => {
-        stopSynthLoop();
-      }).catch(() => {
-        if (!synthTimer) startSynthLoop();
-      });
-    } else if (!synthTimer) {
-      startSynthLoop();
-    }
+    themeAudio.onerror = () => { if (!bgmTimer) startSynth(); };
+  }
+  if (musicOn) {
+    themeAudio.play().catch(() => { if (!bgmTimer) startSynth(); });
   }
 }
 
-function startSynthLoop() {
-  if (synthTimer) return;
-  const notes = [130.81, 164.81, 196.00, 261.63, 196.00, 164.81, 146.83, 220.00];
-  let step = 0;
-  synthTimer = setInterval(() => {
-    if (!musicEnabled || !audioCtx || audioCtx.state !== "running") return;
-    const osc = audioCtx.createOscillator();
-    const g = audioCtx.createGain();
-    osc.type = "sawtooth";
-    osc.frequency.value = notes[step % notes.length];
-    g.gain.setValueAtTime(0.25, audioCtx.currentTime);
+function startSynth() {
+  const notes = [130.81, 164.81, 196.0, 261.63, 196.0, 164.81, 146.83, 220.0];
+  let s = 0;
+  bgmTimer = setInterval(() => {
+    if (!musicOn || usingCustomSong || !audioCtx || audioCtx.state !== 'running') return;
+    if (themeAudio && !themeAudio.paused) return;
+    const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+    o.type = 'sawtooth';
+    o.frequency.value = notes[s % notes.length];
+    g.gain.setValueAtTime(0.22, audioCtx.currentTime);
     g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.22);
-    osc.connect(g);
-    g.connect(window._audioBus);
-    osc.start();
-    osc.stop(audioCtx.currentTime + 0.24);
-    step++;
+    o.connect(g); g.connect(window._out);
+    o.start(); o.stop(audioCtx.currentTime + 0.24);
+    s++;
   }, 260);
 }
 
-function stopSynthLoop() {
-  if (synthTimer) {
-    clearInterval(synthTimer);
-    synthTimer = null;
-  }
+function playSfx(freq = 520) {
+  if (!sfxOn) return;
+  unlockAudio();
+  if (!audioCtx) return;
+  const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+  o.type = 'triangle'; o.frequency.value = freq;
+  g.gain.setValueAtTime(0.3, audioCtx.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.16);
+  o.connect(g); g.connect(window._out);
+  o.start(); o.stop(audioCtx.currentTime + 0.17);
 }
 
 function toggleMusic() {
-  musicEnabled = !musicEnabled;
-  const btn = document.getElementById("btnMusic");
-  btn.textContent = musicEnabled ? "🎵 Music: ON" : "🎵 Music: OFF";
-  btn.classList.toggle("active", musicEnabled);
-  if (!musicEnabled) {
-    themeAudio.pause();
-    stopSynthLoop();
-  } else {
-    unlockAudio();
-  }
+  musicOn = !musicOn;
+  document.getElementById('musicBtn').textContent = musicOn ? '🎵 Music: ON' : '🎵 Music: OFF';
+  if (themeAudio) { musicOn ? themeAudio.play().catch(()=>{}) : themeAudio.pause(); }
 }
-
 function toggleSfx() {
-  sfxEnabled = !sfxEnabled;
-  const btn = document.getElementById("btnSfx");
-  btn.textContent = sfxEnabled ? "🔊 SFX: ON" : "🔊 SFX: OFF";
-  btn.classList.toggle("active", sfxEnabled);
-  if (sfxEnabled) playSfx("ding");
+  sfxOn = !sfxOn;
+  document.getElementById('sfxBtn').textContent = sfxOn ? '🔊 SFX: ON' : '🔊 SFX: OFF';
 }
-
-function setMasterVolume(val) {
-  masterVol = parseFloat(val);
-  themeAudio.volume = masterVol;
-  if (masterGain && audioCtx) {
-    masterGain.gain.setValueAtTime(masterVol, audioCtx.currentTime);
-  }
+function setVol(v) {
+  masterVol = parseFloat(v);
+  if (masterGain) masterGain.gain.value = masterVol;
+  if (themeAudio) themeAudio.volume = masterVol;
 }
-
-function loadLocalSong(e) {
-  const file = e.target.files && e.target.files[0];
-  if (!file) return;
-  const url = URL.createObjectURL(file);
-  usingCustomLocalSong = true;
-  stopSynthLoop();
-  themeAudio.pause();
-  themeAudio.src = url;
-  themeAudio.loop = true;
-  themeAudio.volume = masterVol;
-  themeAudio.play().catch(() => {});
-  document.getElementById("resetThemeBtn").style.display = "inline-flex";
-  showToast("🎶 Loaded: " + file.name);
-}
-
-window.resetToDefaultTheme = function() {
-  usingCustomLocalSong = false;
-  themeMp3Failed = false;
-  const inp = document.getElementById("customSongInput");
-  if (inp) inp.value = "";
-  themeAudio.pause();
-  themeAudio.src = "/media/theme.mp3";
-  themeAudio.loop = true;
-  themeAudio.load();
-  document.getElementById("resetThemeBtn").style.display = "none";
-  if (musicEnabled) unlockAudio();
-  showToast("🔄 Switched back to Default Theme");
-};
-
-function playSfx(type) {
-  if (!sfxEnabled) return;
+function loadCustomSong(inp) {
+  if (!inp.files || !inp.files[0]) return;
   unlockAudio();
-  if (!audioCtx || !window._audioBus) return;
-  const osc = audioCtx.createOscillator();
-  const g = audioCtx.createGain();
-  const now = audioCtx.currentTime;
-  if (type === "win") {
-    osc.type = "triangle";
-    osc.frequency.setValueAtTime(523.25, now);
-    osc.frequency.setValueAtTime(659.25, now + 0.1);
-    osc.frequency.setValueAtTime(783.99, now + 0.2);
-    g.gain.setValueAtTime(0.4, now);
-    g.gain.exponentialRampToValueAtTime(0.001, now + 0.45);
-    osc.connect(g); g.connect(window._audioBus);
-    osc.start(now); osc.stop(now + 0.46);
-  } else if (type === "buzz") {
-    osc.type = "sawtooth";
-    osc.frequency.setValueAtTime(150, now);
-    osc.frequency.linearRampToValueAtTime(95, now + 0.3);
-    g.gain.setValueAtTime(0.35, now);
-    g.gain.exponentialRampToValueAtTime(0.001, now + 0.32);
-    osc.connect(g); g.connect(window._audioBus);
-    osc.start(now); osc.stop(now + 0.34);
-  } else {
-    osc.type = "sine";
-    osc.frequency.setValueAtTime(660, now);
-    g.gain.setValueAtTime(0.3, now);
-    g.gain.exponentialRampToValueAtTime(0.001, now + 0.16);
-    osc.connect(g); g.connect(window._audioBus);
-    osc.start(now); osc.stop(now + 0.18);
-  }
+  usingCustomSong = true;
+  themeAudio.src = URL.createObjectURL(inp.files[0]);
+  themeAudio.loop = true;
+  themeAudio.volume = masterVol;
+  if (musicOn) themeAudio.play().catch(()=>{});
+  document.getElementById('resetThemeBtn').style.display = 'inline-block';
 }
-
-document.addEventListener("pointerdown", unlockAudio, { once: true });
-
-// ==================== QB's & MONETIZATION PACKS ====================
-const BUILTIN_PACKS = {
-  "NAIJA2026": [
-    { q: "What year did Nigeria gain independence?", a: "1960" },
-    { q: "How many states are in Nigeria?", a: "36" },
-    { q: "Which Nigerian artist won the Grammy for Best Global Music Album in 2021?", a: "Burna Boy" },
-    { q: "What is the capital city of Ogun State?", a: "Abeokuta" },
-    { q: "What is the highest mountain peak in Nigeria?", a: "Chappal Waddi" }
-  ],
-  "FOOTYPRO": [
-    { q: "How many World Cup titles has Brazil won?", a: "5" },
-    { q: "Which club has won the most UEFA Champions League trophies?", a: "Real Madrid" },
-    { q: "In what year did Nigeria win the Olympic football gold medal?", a: "1996" },
-    { q: "How many players are on the pitch for one football team?", a: "11" }
-  ],
-  "PARTYVIP": [
-    { q: "How many continents are on Earth?", a: "7" },
-    { q: "What is the chemical symbol for Gold?", a: "Au" },
-    { q: "How many hours are in 3 full days?", a: "72" },
-    { q: "Which planet is closest to the Sun?", a: "Mercury" }
-  ]
-};
-
-let savedQbs = JSON.parse(localStorage.getItem("ds_saved_qbs") || "[]");
-let qbCursor = 0;
-
-function persistQbs() {
-  localStorage.setItem("ds_saved_qbs", JSON.stringify(savedQbs));
-  document.getElementById("qbCountBadge").textContent = savedQbs.length + " Saved";
-  renderQbList();
+function resetTheme() {
+  usingCustomSong = false;
+  document.getElementById('songPicker').value = '';
+  themeAudio.pause();
+  themeAudio.src = '/media/theme.mp3';
+  themeAudio.load();
+  if (musicOn) themeAudio.play().catch(()=>{ if (!bgmTimer) startSynth(); });
+  document.getElementById('resetThemeBtn').style.display = 'none';
 }
+document.addEventListener('pointerdown', unlockAudio, { once: true });
 
-function toggleQbDrawer() {
-  document.getElementById("qbDrawer").classList.toggle("hidden");
-  renderQbList();
+// Personal question check + AI Suggested Answer helper
+function isPersonalQuestion(q) {
+  return /\b(i|me|my|mine|myself|our|ours|we|us|nickname|birthday|favorite|favourite)\b/i.test(q);
 }
-
-function addCustomQb() {
-  const q = document.getElementById("newQbQuestion").value.trim();
-  const a = document.getElementById("newQbAnswer").value.trim();
-  if (!q || !a) return showToast("Enter both a question and an answer.");
-  savedQbs.push({ q, a });
-  document.getElementById("newQbQuestion").value = "";
-  document.getElementById("newQbAnswer").value = "";
-  persistQbs();
-  playSfx("ding");
-  showToast("✅ Saved to My QB's!");
-}
-
-function deleteQb(idx) {
-  savedQbs.splice(idx, 1);
-  persistQbs();
-}
-
-function renderQbList() {
-  const box = document.getElementById("qbListContainer");
-  if (!box) return;
-  if (savedQbs.length === 0) {
-    box.innerHTML = '<div class="sub">No saved questions yet. Add one above or unlock a Pro Pack!</div>';
+async function suggestAnswer(qId, aId, statusId) {
+  const q = (document.getElementById(qId).value || '').trim();
+  const st = document.getElementById(statusId);
+  if (!q) { st.textContent = 'Type a question first.'; return; }
+  if (isPersonalQuestion(q)) {
+    st.textContent = '🔒 Personal question detected — enter your own secret answer!';
+    playSfx(320);
     return;
   }
-  box.innerHTML = savedQbs.map((item, i) => `
-    <div class="qb-item">
-      <div style="font-weight:700; font-size:0.88rem;">Q: ${escapeHtml(item.q)}</div>
-      <div style="color:var(--green); font-size:0.82rem; margin:4px 0;">A: ${escapeHtml(item.a)}</div>
-      <button type="button" class="btn btn-red btn-sm" onclick="deleteQb(${i})">🗑 Remove</button>
-    </div>
-  `).join("");
-}
-
-function redeemPackCode() {
-  const raw = document.getElementById("packCodeInput").value.trim();
-  if (!raw) return showToast("Enter a Pack Code first.");
-  const upper = raw.toUpperCase();
-  if (BUILTIN_PACKS[upper]) {
-    savedQbs = savedQbs.concat(BUILTIN_PACKS[upper]);
-    document.getElementById("packCodeInput").value = "";
-    persistQbs();
-    playSfx("win");
-    return showToast("🎉 Unlocked " + BUILTIN_PACKS[upper].length + " Pro Questions!");
-  }
-  if (raw.startsWith("DSPACK:")) {
-    try {
-      const decoded = JSON.parse(decodeURIComponent(escape(atob(raw.slice(7)))));
-      if (Array.isArray(decoded) && decoded.length > 0) {
-        savedQbs = savedQbs.concat(decoded);
-        document.getElementById("packCodeInput").value = "";
-        persistQbs();
-        playSfx("win");
-        return showToast("🎉 Imported " + decoded.length + " Questions!");
-      }
-    } catch (err) {}
-  }
-  playSfx("buzz");
-  showToast("❌ Invalid Pack Code.");
-}
-
-function exportSellablePack() {
-  if (savedQbs.length === 0) return showToast("Add questions to My QB's first!");
-  const code = "DSPACK:" + btoa(unescape(encodeURIComponent(JSON.stringify(savedQbs))));
-  navigator.clipboard?.writeText(code).catch(() => {});
-  prompt("Copy this sellable DSPACK code for your buyers on Selar/Paystack:", code);
-}
-
-// Creator Payment Link
-function saveCreatorLink() {
-  const url = document.getElementById("creatorUrlInput").value.trim();
-  if (!url) {
-    localStorage.removeItem("ds_creator_link");
-    document.getElementById("creatorLinkDisplay").classList.add("hidden");
-    return showToast("Creator link cleared.");
-  }
-  localStorage.setItem("ds_creator_link", url);
-  applyCreatorLink();
-  showToast("🏆 Creator Payment Link Saved!");
-}
-
-function applyCreatorLink() {
-  const url = localStorage.getItem("ds_creator_link");
-  if (url) {
-    document.getElementById("creatorUrlInput").value = url;
-    document.getElementById("creatorPayAnchor").href = url;
-    document.getElementById("creatorLinkDisplay").classList.remove("hidden");
-  }
-}
-
-// ==================== MULTIPLAYER ROOM CLIENT ====================
-let pid = localStorage.getItem("ds_pid") || ("p_" + Math.random().toString(36).slice(2, 10));
-localStorage.setItem("ds_pid", pid);
-let roomCode = "";
-let pollTimer = null;
-let lastRenderedSignature = "";
-
-const STARTER_PROMPTS = [
-  "How many days are in a leap year?",
-  "What is the capital of France?",
-  "How many continents are there on Earth?",
-  "What is 15 multiplied by 4?"
-];
-
-async function api(path, payload) {
-  const res = await fetch(path, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload)
-  });
-  return res.json();
-}
-
-async function createRoom() {
-  const name = document.getElementById("playerNameInput").value.trim() || "Host";
-  localStorage.setItem("ds_name", name);
-  const data = await api("/api/create", { pid, name });
-  if (data.error) return showToast(data.error);
-  enterRoomView(data.code);
-}
-
-async function joinRoom(overrideCode) {
-  const code = (overrideCode || document.getElementById("joinCodeInput").value).trim().toUpperCase();
-  const name = document.getElementById("playerNameInput").value.trim() || ("Player_" + pid.slice(-3));
-  if (code.length !== 4) return showToast("Enter a 4-letter room code.");
-  localStorage.setItem("ds_name", name);
-  const data = await api("/api/join", { pid, name, code });
-  if (data.error) return showToast(data.error);
-  enterRoomView(code);
-}
-
-function enterRoomView(code) {
-  roomCode = code;
-  lastRenderedSignature = "";
-  document.getElementById("viewWelcome").classList.add("hidden");
-  document.getElementById("viewRoom").classList.remove("hidden");
-  document.getElementById("roomCodeBadge").textContent = "ROOM: " + code;
-  if (pollTimer) clearInterval(pollTimer);
-  pollState();
-  pollTimer = setInterval(pollState, 1500);
-}
-
-async function leaveRoom() {
-  if (roomCode) {
-    await api("/api/action", { code: roomCode, pid, action: "leave" }).catch(() => {});
-  }
-  if (pollTimer) clearInterval(pollTimer);
-  roomCode = "";
-  document.getElementById("viewRoom").classList.add("hidden");
-  document.getElementById("viewWelcome").classList.remove("hidden");
-}
-
-function copyInviteLink() {
-  const url = window.location.origin + "/?room=" + roomCode;
-  navigator.clipboard?.writeText(url).catch(() => {});
-  showToast("🔗 Invite link copied: " + url);
-}
-
-async function updateSettings() {
-  const umpire = document.getElementById("umpireSelect").value === "umpire";
-  const target = parseInt(document.getElementById("targetPtsSelect").value, 10) || 25;
-  await api("/api/action", { code: roomCode, pid, action: "settings", umpire, target });
-}
-
-async function startMatch() {
-  playSfx("win");
-  await api("/api/action", { code: roomCode, pid, action: "start" });
-  pollState();
-}
-
-async function kickPlayer(targetPid) {
-  await api("/api/action", { code: roomCode, pid, action: "kick", target_pid: targetPid });
-  pollState();
-}
-
-async function pollState() {
-  if (!roomCode) return;
+  st.textContent = '✨ Finding suggested answer...';
   try {
-    const res = await fetch(`/api/state?code=${encodeURIComponent(roomCode)}&pid=${encodeURIComponent(pid)}`);
-    const state = await res.json();
-    if (state.error) {
-      showToast(state.error);
-      leaveRoom();
+    const clean = q.replace(/^(what is|who is|where is|capital of|define)\s+/i, '').replace(/\?+$/, '').trim();
+    const res = await fetch('https://en.wikipedia.org/api/rest_v1/page/summary/' + encodeURIComponent(clean));
+    if (res.ok) {
+      const data = await res.json();
+      if (data.title && data.type !== 'disambiguation') {
+        document.getElementById(aId).value = data.title;
+        st.textContent = '✅ Suggested answer filled! You can edit it anytime.';
+        playSfx(660);
+        return;
+      }
+    }
+    const sRes = await fetch('https://en.wikipedia.org/w/api.php?action=opensearch&limit=1&format=json&origin=*&search=' + encodeURIComponent(clean));
+    const sData = await sRes.json();
+    if (sData && sData[1] && sData[1][0]) {
+      document.getElementById(aId).value = sData[1][0];
+      st.textContent = '✅ Suggested answer filled! You can edit it anytime.';
+      playSfx(660);
       return;
     }
-    renderRoomState(state);
-  } catch (e) {}
+    st.textContent = 'Could not auto-suggest — type your custom answer.';
+  } catch (e) {
+    st.textContent = 'Offline or unavailable — type your custom answer.';
+  }
 }
 
-function renderRoomState(state) {
-  const isHost = state.host_pid === pid;
-  document.getElementById("modeBadge").textContent = state.umpire ? "⚖️ Umpire Mode" : "🛡️ Standard Contest Mode";
-  document.getElementById("hostSettingsBox").classList.toggle("hidden", !(isHost && state.phase === "lobby"));
-
-  // Leaderboard
-  const plist = document.getElementById("playersList");
-  plist.innerHTML = state.players.map(p => `
+// QB & Pro Packs
+const PRO_PACKS = {
+  NAIJA2026: [
+    {q:'Capital city of Nigeria?', a:'Abuja'},
+    {q:'Popular Nigerian rice dish cooked in tomato stew?', a:'Jollof Rice'},
+    {q:'Year Nigeria gained independence?', a:'1960'}
+  ],
+  FOOTYPRO: [
+    {q:'Country that won the 2022 FIFA World Cup?', a:'Argentina'},
+    {q:'Nickname of Arsenal FC?', a:'Gunners'},
+    {q:'Number of players per team on a football pitch?', a:'11'}
+  ],
+  PARTYVIP: [
+    {q:'Yellow fruit monkeys love?', a:'Banana'},
+    {q:'Breakfast food laid by a hen?', a:'Fried Egg'},
+    {q:'Primary color of a ripe tomato?', a:'Red'}
+  ]
+};
+function getQb() {
+  try { return JSON.parse(localStorage.getItem('ds_qb') || '[]'); } catch { return []; }
+}
+function setQb(list) { localStorage.setItem('ds_qb', JSON.stringify(list)); renderQbList(); }
+function openQbModal() { document.getElementById('qbModal').style.display = 'block'; renderQbList(); }
+function closeQbModal() { document.getElementById('qbModal').style.display = 'none'; }
+function saveQbItem() {
+  const q = document.getElementById('qbQuestion').value.trim();
+  const a = document.getElementById('qbAnswer').value.trim();
+  if (!q || !a) return;
+  const list = getQb();
+  list.unshift({q, a});
+  setQb(list);
+  document.getElementById('qbQuestion').value = '';
+  document.getElementById('qbAnswer').value = '';
+  playSfx(600);
+}
+function redeemPack() {
+  const raw = document.getElementById('packCodeInput').value.trim();
+  const up = raw.toUpperCase();
+  const list = getQb();
+  if (PRO_PACKS[up]) {
+    setQb([...PRO_PACKS[up], ...list]);
+    document.getElementById('packCodeInput').value = '';
+    alert('Unlocked ' + up + ' pack!');
+  } else if (raw.startsWith('DSPACK:')) {
+    try {
+      const items = JSON.parse(atob(raw.slice(7)));
+      setQb([...items, ...list]);
+      document.getElementById('packCodeInput').value = '';
+      alert('Imported ' + items.length + ' questions!');
+    } catch { alert('Invalid DSPACK code.'); }
+  } else {
+    alert('Invalid pack code.');
+  }
+}
+function exportQbPack() {
+  const list = getQb();
+  if (!list.length) { alert('Add questions to My QB first.'); return; }
+  const code = 'DSPACK:' + btoa(JSON.stringify(list));
+  navigator.clipboard?.writeText(code);
+  prompt('Copy your sellable DSPACK code:', code);
+}
+function renderQbList() {
+  const list = getQb();
+  const el = document.getElementById('qbList');
+  el.innerHTML = list.map((item, i) => `
     <div class="player-item">
-      <div>
-        <strong>${escapeHtml(p.name)}</strong>
-        ${p.pid === state.host_pid ? '<span class="badge" style="margin-left:6px;">HOST</span>' : ''}
-        ${p.pid === state.manager_pid ? '<span class="badge badge-gold" style="margin-left:6px;">MANAGER</span>' : ''}
-      </div>
-      <div style="display:flex; align-items:center; gap:8px;">
-        <strong style="color:var(--green);">${p.score} pts</strong>
-        ${(isHost && p.pid !== pid) ? `<button type="button" class="btn btn-red btn-sm" onclick="kickPlayer('${p.pid}')">Kick</button>` : ''}
+      <div style="font-size:13px"><b>${item.q}</b><br><span style="color:#38bdf8">${item.a}</span></div>
+      <div class="row">
+        <button type="button" class="btn btn-primary" onclick="useQbItem(${i})">Use</button>
+        <button type="button" class="btn btn-red" onclick="delQbItem(${i})">✕</button>
       </div>
     </div>
-  `).join("");
+  `).join('') || '<div style="color:#64748b;font-size:13px">No saved questions yet.</div>';
+}
+function useQbItem(i) {
+  const item = getQb()[i];
+  if (!item) return;
+  const qIn = document.getElementById('liveQuestion');
+  const aIn = document.getElementById('liveAnswer');
+  if (qIn && aIn) { qIn.value = item.q; aIn.value = item.a; closeQbModal(); }
+  else { alert('Enter a room and wait for your Setter turn to load this question!'); }
+}
+function delQbItem(i) { const list = getQb(); list.splice(i, 1); setQb(list); }
 
-  const stageCard = document.getElementById("gameStageCard");
-  if (state.phase === "lobby") {
-    stageCard.classList.add("hidden");
+// Creator Link
+function saveCreatorLink() {
+  const url = document.getElementById('creatorLinkInput').value.trim();
+  if (url) { localStorage.setItem('ds_creator_url', url); loadCreatorLink(); }
+}
+function loadCreatorLink() {
+  const url = localStorage.getItem('ds_creator_url') || '';
+  const btn = document.getElementById('creatorPayBtn');
+  if (url) { btn.href = url; btn.style.display = 'block'; document.getElementById('creatorLinkInput').value = url; }
+}
+loadCreatorLink();
+
+// Multiplayer State
+let ROOM_CODE = '', PLAYER_ID = '', pollTimer = null, roundStartMs = 0, lastPhase = '';
+const urlRoom = new URLSearchParams(location.search).get('room');
+if (urlRoom) document.getElementById('joinCode').value = urlRoom.toUpperCase();
+
+async function createRoom() {
+  unlockAudio();
+  const res = await fetch('/api/room/create', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({
+      name: document.getElementById('hostName').value || 'Host',
+      mode: document.getElementById('gameMode').value,
+      rounds: document.getElementById('roundCount').value,
+      timer: document.getElementById('timerSec').value
+    })
+  });
+  const d = await res.json();
+  if (!d.ok) return alert(d.error);
+  ROOM_CODE = d.code; PLAYER_ID = d.player_id;
+  enterRoom(d.room);
+}
+
+async function joinRoom() {
+  unlockAudio();
+  const res = await fetch('/api/room/join', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({
+      name: document.getElementById('joinName').value || 'Player',
+      code: document.getElementById('joinCode').value
+    })
+  });
+  const d = await res.json();
+  if (!d.ok) return alert(d.error);
+  ROOM_CODE = d.code; PLAYER_ID = d.player_id;
+  enterRoom(d.room);
+}
+
+function enterRoom(room) {
+  document.getElementById('homeView').style.display = 'none';
+  document.getElementById('roomView').style.display = 'block';
+  renderRoom(room);
+  if (pollTimer) clearInterval(pollTimer);
+  pollTimer = setInterval(pollRoom, 1500);
+}
+
+async function pollRoom() {
+  if (!ROOM_CODE) return;
+  const res = await fetch(`/api/room/state?code=${ROOM_CODE}&pid=${PLAYER_ID}`);
+  const d = await res.json();
+  if (!d.ok) { clearInterval(pollTimer); alert(d.error || 'Disconnected'); location.reload(); return; }
+  renderRoom(d.room);
+}
+
+async function sendAction(action, extra = {}) {
+  const res = await fetch('/api/room/action', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ code: ROOM_CODE, pid: PLAYER_ID, action, ...extra })
+  });
+  const d = await res.json();
+  if (!d.ok) return alert(d.error);
+  renderRoom(d.room);
+}
+
+function copyInvite() {
+  const link = `${location.origin}/?room=${ROOM_CODE}`;
+  navigator.clipboard?.writeText(link);
+  alert('Invite link copied: ' + link);
+}
+
+function renderRoom(r) {
+  document.getElementById('roomCodeBadge').textContent = 'ROOM: ' + r.code;
+  document.getElementById('roundBadge').textContent = `Round ${r.round}/${r.total_rounds}`;
+  document.getElementById('modeBadge').textContent = r.mode === 'umpire' ? 'Umpire Mode' : 'Standard Mode';
+
+  const isHost = PLAYER_ID === r.host_id;
+  const isSetter = PLAYER_ID === r.setter_id;
+  const isGuesser = PLAYER_ID === r.guesser_id;
+
+  document.getElementById('playerList').innerHTML = r.players.map(p => `
+    <div class="player-item">
+      <div><b>${p.name}</b> ${p.id === r.host_id ? '👑' : ''} <span style="color:#94a3b8;font-size:12px">(${p.total_time}s)</span></div>
+      <div class="row">
+        <span class="pill">${p.score} pts</span>
+        ${isHost && p.id !== PLAYER_ID ? `<button type="button" class="btn btn-red" onclick="sendAction('kick',{target_id:'${p.id}'})">Kick</button>` : ''}
+      </div>
+    </div>
+  `).join('');
+
+  const lobbyCtrl = document.getElementById('lobbyControls');
+  lobbyCtrl.innerHTML = (r.phase === 'lobby' && isHost)
+    ? `<button type="button" class="btn btn-green" style="width:100%" onclick="sendAction('start')">▶️ Start Match</button>`
+    : '';
+
+  const stage = document.getElementById('stageCard');
+  if (r.phase === 'lobby') {
+    stage.innerHTML = `<div style="text-align:center;color:#94a3b8">Waiting for host to start the match...</div>`;
     return;
   }
-  stageCard.classList.remove("hidden");
-  document.getElementById("roundBadge").textContent = `Round ${state.round} • Target ${state.target} pts`;
 
-  const isManager = state.manager_pid === pid;
-  document.getElementById("roleBadge").textContent = isManager ? "🧠 You are the Manager" : "🎯 Guesser";
-
-  // Timer update without rebuilding inputs
-  const timerBox = document.getElementById("countdownTimer");
-  if (state.phase === "guessing" && state.deadline) {
-    const rem = Math.max(0, Math.ceil(state.deadline - state.server_time));
-    timerBox.classList.remove("hidden");
-    timerBox.textContent = rem + "s remaining";
-  } else {
-    timerBox.classList.add("hidden");
+  if (r.phase === 'set_question') {
+    if (isSetter) {
+      if (!document.getElementById('liveQuestion')) {
+        stage.innerHTML = `
+          <h2>✍️ Your Turn to Set a Question</h2>
+          <div class="row">
+            <input id="liveQuestion" placeholder="Type your question..." style="flex:1">
+            <button type="button" class="btn btn-amber" onclick="suggestAnswer('liveQuestion','liveAnswer','liveAiStatus')">✨ Suggest Answer</button>
+          </div>
+          <div id="liveAiStatus" style="font-size:12px;color:#94a3b8;margin-bottom:6px"></div>
+          <input id="liveAnswer" placeholder="Secret Answer">
+          <div class="row">
+            <button type="button" class="btn" onclick="openQbModal()">📚 Pick from My QB's</button>
+            <button type="button" class="btn btn-primary" style="flex:1" onclick="submitLiveQuestion()">Lock In Question 🔒</button>
+          </div>
+        `;
+      }
+    } else {
+      stage.innerHTML = `<div style="text-align:center;color:#94a3b8">⏳ <b>${r.setter_name}</b> is setting a question for <b>${r.guesser_name}</b>...</div>`;
+    }
+    return;
   }
 
-  // Prevent polling from overwriting user typing in inputs
-  const sig = JSON.stringify({
-    phase: state.phase,
-    round: state.round,
-    manager: state.manager_pid,
-    question: state.question,
-    guessesCount: (state.guesses || []).length,
-    contested: state.contested,
-    winner: state.winner
-  });
-  if (sig === lastRenderedSignature) return;
-  lastRenderedSignature = sig;
-
-  const box = document.getElementById("stageContent");
-
-  if (state.phase === "asking") {
-    if (isManager) {
-      box.innerHTML = `
-        <p class="sub">Write your question and exact secret answer, pick a starter prompt, or load from <b>My QB's</b>:</p>
-        <div style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom:10px;">
-          ${STARTER_PROMPTS.map(pr => `<button type="button" class="prompt-chip" onclick="usePrompt('${escapeAttr(pr)}')">${escapeHtml(pr)}</button>`).join("")}
-          ${savedQbs.length > 0 ? `<button type="button" class="prompt-chip" style="border-color:var(--gold); color:var(--gold);" onclick="loadNextSavedQb()">⚡ Next QB (${savedQbs.length})</button>` : ''}
-        </div>
-        <input type="text" id="askQuestionInput" placeholder="Type your question here...">
-        <input type="text" id="askAnswerInput" placeholder="Type the exact answer here...">
-        <button type="button" class="btn btn-primary" onclick="submitQuestion()">📨 Send Question to Arena</button>
-      `;
+  if (r.phase === 'guessing') {
+    if (lastPhase !== 'guessing') { roundStartMs = Date.now(); playSfx(580); }
+    lastPhase = 'guessing';
+    if (isGuesser) {
+      if (!document.getElementById('guessInput')) {
+        stage.innerHTML = `
+          <h2>🎯 Your Turn to Guess!</h2>
+          <div style="font-size:17px;font-weight:700;margin-bottom:8px">${r.question}</div>
+          <div class="hint-box">💡 Hint: ${r.hint}</div>
+          <input id="guessInput" placeholder="Type your guess...">
+          <button type="button" class="btn btn-green" style="width:100%" onclick="submitLiveGuess()">Submit Guess ⚡</button>
+        `;
+      }
     } else {
-      box.innerHTML = `<p class="sub">⏳ Waiting for the <b>Manager</b> to send the round question...</p>`;
-    }
-  } else if (state.phase === "guessing") {
-    const alreadyGuessed = (state.guesses || []).some(g => g.pid === pid);
-    const ansIsDigits = /^\d+$/.test((state.answer || "").trim());
-    const hintLine = (isManager && ansIsDigits)
-      ? `<div class="badge badge-gold" style="margin-bottom:8px;">Manager Digit Hint: Answer has ${(state.answer || "").trim().length} digits</div>`
-      : "";
-
-    if (isManager) {
-      box.innerHTML = `
-        <div style="font-weight:800; font-size:1.05rem; margin-bottom:6px;">Q: ${escapeHtml(state.question)}</div>
-        <div style="color:var(--green); font-size:0.88rem; margin-bottom:8px;">Secret Answer: <b>${escapeHtml(state.answer)}</b></div>
-        ${hintLine}
-        <p class="sub">Guesses submitted so far: <b>${(state.guesses || []).length}</b></p>
-        <button type="button" class="btn btn-gold" onclick="closeGuessing()">⏹ Close Guesses & Review</button>
-      `;
-    } else if (alreadyGuessed) {
-      box.innerHTML = `
-        <div style="font-weight:800; font-size:1.05rem; margin-bottom:8px;">Q: ${escapeHtml(state.question)}</div>
-        <p class="sub">✅ Your guess is locked in! Waiting for other players...</p>
-      `;
-    } else {
-      box.innerHTML = `
-        <div style="font-weight:800; font-size:1.05rem; margin-bottom:10px;">Q: ${escapeHtml(state.question)}</div>
-        <input type="text" id="guessInput" placeholder="Type your guess quickly (speed breaks ties!)...">
-        <button type="button" class="btn btn-green" onclick="submitGuess()">⚡ Lock In Guess</button>
+      stage.innerHTML = `
+        <h2>👀 Watching Guess</h2>
+        <div style="font-size:16px;font-weight:700;margin-bottom:6px">${r.question}</div>
+        <div class="hint-box">💡 Hint: ${r.hint}</div>
+        <div style="color:#94a3b8">Waiting for <b>${r.guesser_name}</b> to answer...</div>
       `;
     }
-  } else if (state.phase === "review") {
-    const guessesHtml = (state.guesses || []).map(g => `
-      <div class="player-item">
-        <div>
-          <strong>${escapeHtml(g.name)}</strong>: <span style="color:var(--accent);">${escapeHtml(g.guess)}</span>
-          <div style="font-size:0.75rem; color:var(--muted);">Time: ${g.elapsed}s</div>
+    return;
+  }
+  lastPhase = r.phase;
+
+  if (r.phase === 'umpire_review') {
+    stage.innerHTML = `
+      <h2>⚖️ Umpire Final Ruling</h2>
+      <p><b>Question:</b> ${r.question}</p>
+      <p><b>Secret Answer:</b> <span style="color:#38bdf8">${r.answer}</span></p>
+      <p style="margin-bottom:10px"><b>${r.guesser_name}'s Guess:</b> <span style="color:#fbbf24">${r.guess}</span> (${r.guess_time}s)</p>
+      ${isHost ? `
+        <div class="row">
+          <button type="button" class="btn btn-green" style="flex:1" onclick="sendAction('umpire_rule',{winner:'guesser'})">✅ Guesser Right (+5)</button>
+          <button type="button" class="btn btn-primary" style="flex:1" onclick="sendAction('umpire_rule',{winner:'setter'})">❌ Setter Wins (+5)</button>
         </div>
-        ${isManager ? `<button type="button" class="btn btn-green btn-sm" onclick="awardWinner('${g.pid}')">✅ Accept (+5 Pts)</button>` : ''}
+      ` : '<div style="color:#94a3b8">Waiting for Umpire ruling...</div>'}
+    `;
+    return;
+  }
+
+  if (r.phase === 'contested') {
+    stage.innerHTML = `
+      <h2>⚖️ Ruling Contested by ${r.guesser_name}!</h2>
+      <p><b>Question:</b> ${r.question}</p>
+      <p><b>Your Secret Answer:</b> <span style="color:#38bdf8">${r.answer}</span></p>
+      <p style="margin-bottom:12px"><b>${r.guesser_name}'s Guess:</b> <span style="color:#fbbf24">${r.guess}</span></p>
+      ${isSetter ? `
+        <div class="row">
+          <button type="button" class="btn btn-green" style="flex:1" onclick="sendAction('resolve_contest',{accept:true})">✅ Accept Guesser is Right (+5 to Guesser)</button>
+          <button type="button" class="btn btn-red" style="flex:1" onclick="sendAction('resolve_contest',{accept:false})">❌ Reject Contest (Keep +5 Pts)</button>
+        </div>
+      ` : `<div style="color:#94a3b8">Waiting for <b>${r.setter_name}</b> to review the contest...</div>`}
+    `;
+    return;
+  }
+
+  if (r.phase === 'review') {
+    const canContest = r.mode !== 'umpire' && isGuesser && r.winner_awarded === 'setter' && !r.contested;
+    stage.innerHTML = `
+      <h2>📊 Round Result</h2>
+      <p><b>Question:</b> ${r.question}</p>
+      <p><b>Secret Answer:</b> <span style="color:#38bdf8">${r.answer}</span></p>
+      <p><b>Guess:</b> ${r.guess} (${r.guess_time}s)</p>
+      <div class="hint-box">${r.ruling}</div>
+      <div class="row" style="margin-top:10px">
+        ${canContest ? `<button type="button" class="btn btn-amber" onclick="sendAction('contest')">⚖️ Contest Ruling</button>` : ''}
+        ${(isHost || isSetter) ? `<button type="button" class="btn btn-primary" style="flex:1" onclick="sendAction('next_round')">Next Round ➡️</button>` : ''}
       </div>
-    `).join("") || '<p class="sub">No guesses were submitted this round.</p>';
-
-    box.innerHTML = `
-      <div style="font-weight:800; margin-bottom:4px;">Q: ${escapeHtml(state.question)}</div>
-      <div style="color:var(--green); margin-bottom:10px;">Official Answer: <b>${escapeHtml(state.answer)}</b></div>
-      ${guessesHtml}
-      ${isManager ? `
-        <div class="row" style="margin-top:10px;">
-          <button type="button" class="btn btn-gold btn-sm" onclick="reAskNewQuestion()">🔄 Send New Question (0 Pts & Re-Ask)</button>
-          <button type="button" class="btn btn-ghost btn-sm" onclick="nextRound()">⏭ No Winner — Next Turn</button>
-        </div>
-      ` : (!state.umpire ? `
-        <button type="button" class="btn btn-red btn-sm" style="margin-top:8px;" onclick="contestRound()">🚩 Contest Ruling</button>
-      ` : '')}
-      ${state.contested ? `<div class="badge badge-gold" style="margin-top:8px;">⚠️ A player contested this ruling! Manager can Accept Guess (+5 Pts) or Send New Question.</div>` : ''}
     `;
-  } else if (state.phase === "gameover") {
-    box.innerHTML = `
-      <h2 style="color:var(--gold); text-align:center;">🏆 CHAMPION: ${escapeHtml(state.winner || "Winner")}!</h2>
-      <p class="sub" style="text-align:center;">Target score reached! Ready for a rematch?</p>
-      ${isHost ? `<button type="button" class="btn btn-primary" onclick="startMatch()">🔁 Play Rematch</button>` : ''}
+    return;
+  }
+
+  if (r.phase === 'gameover') {
+    const sorted = [...r.players].sort((a, b) => (b.score - a.score) || (a.total_time - b.total_time));
+    const champ = sorted[0];
+    stage.innerHTML = `
+      <h2>🏆 Match Complete!</h2>
+      <div class="hint-box">Champion: ${champ.name} (${champ.score} pts • ${champ.total_time}s)</div>
+      ${isHost ? `<button type="button" class="btn btn-green" style="width:100%;margin-top:10px" onclick="sendAction('start')">🔄 Play Again</button>` : ''}
     `;
   }
 }
 
-function usePrompt(txt) {
-  const inp = document.getElementById("askQuestionInput");
-  if (inp) inp.value = txt;
+function submitLiveQuestion() {
+  sendAction('set_question', {
+    question: document.getElementById('liveQuestion').value,
+    answer: document.getElementById('liveAnswer').value
+  });
 }
-
-function loadNextSavedQb() {
-  if (savedQbs.length === 0) return;
-  const item = savedQbs[qbCursor % savedQbs.length];
-  qbCursor++;
-  const qInp = document.getElementById("askQuestionInput");
-  const aInp = document.getElementById("askAnswerInput");
-  if (qInp) qInp.value = item.q;
-  if (aInp) aInp.value = item.a;
-  playSfx("ding");
+function submitLiveGuess() {
+  const elapsed = (Date.now() - roundStartMs) / 1000;
+  sendAction('submit_guess', {
+    guess: document.getElementById('guessInput').value,
+    elapsed
+  });
 }
-
-async function submitQuestion() {
-  const q = document.getElementById("askQuestionInput").value.trim();
-  const a = document.getElementById("askAnswerInput").value.trim();
-  if (!q || !a) return showToast("Enter both a question and an answer.");
-  playSfx("ding");
-  await api("/api/action", { code: roomCode, pid, action: "ask", question: q, answer: a });
-  pollState();
-}
-
-async function submitGuess() {
-  const g = document.getElementById("guessInput").value.trim();
-  if (!g) return showToast("Type your guess first!");
-  playSfx("ding");
-  await api("/api/action", { code: roomCode, pid, action: "guess", guess: g });
-  pollState();
-}
-
-async function closeGuessing() {
-  await api("/api/action", { code: roomCode, pid, action: "close_guesses" });
-  pollState();
-}
-
-async function awardWinner(winnerPid) {
-  playSfx("win");
-  await api("/api/action", { code: roomCode, pid, action: "award", winner_pid: winnerPid });
-  pollState();
-}
-
-async function reAskNewQuestion() {
-  await api("/api/action", { code: roomCode, pid, action: "reask" });
-  pollState();
-}
-
-async function nextRound() {
-  await api("/api/action", { code: roomCode, pid, action: "next_round" });
-  pollState();
-}
-
-async function contestRound() {
-  playSfx("buzz");
-  await api("/api/action", { code: roomCode, pid, action: "contest" });
-  pollState();
-}
-
-function escapeHtml(s) {
-  return String(s || "").replace(/[&<>"']/g, m => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[m]));
-}
-function escapeAttr(s) {
-  return String(s || "").replace(/'/g, "\'");
-}
-
-let toastTimeout = null;
-function showToast(msg) {
-  const t = document.getElementById("toastBox");
-  t.textContent = msg;
-  t.classList.remove("hidden");
-  if (toastTimeout) clearTimeout(toastTimeout);
-  toastTimeout = setTimeout(() => t.classList.add("hidden"), 2800);
-}
-
-// Init on load
-window.addEventListener("DOMContentLoaded", () => {
-  const savedName = localStorage.getItem("ds_name");
-  if (savedName) document.getElementById("playerNameInput").value = savedName;
-  applyCreatorLink();
-  persistQbs();
-  startIntroSequence();
-
-  const params = new URLSearchParams(window.location.search);
-  const autoRoom = params.get("room");
-  if (autoRoom) {
-    document.getElementById("joinCodeInput").value = autoRoom.toUpperCase();
-  }
-});
 </script>
 </body>
 </html>
 """
 
+
 @app.route("/")
 def index():
     return render_template_string(HTML_PAGE)
 
-@app.route("/media/<path:filename>")
-def serve_media(filename):
-    return send_from_directory(".", filename)
-
-@app.route("/health")
-def health():
-    cleanup_rooms()
-    return jsonify({"status": "ok", "rooms": len(ROOMS)})
-
-@app.route("/api/create", methods=["POST"])
-def api_create():
-    cleanup_rooms()
-    data = request.get_json(silent=True) or {}
-    pid = str(data.get("pid", "")).strip()
-    name = str(data.get("name", "Host")).strip()[:20] or "Host"
-    if not pid:
-        return jsonify({"error": "Missing player ID"}), 400
-    code = make_room_code()
-    now = time.time()
-    ROOMS[code] = {
-        "code": code,
-        "host_pid": pid,
-        "manager_idx": 0,
-        "players": [{"pid": pid, "name": name, "score": 0}],
-        "umpire": False,
-        "target": 25,
-        "phase": "lobby",
-        "round": 1,
-        "question": "",
-        "answer": "",
-        "asked_at": 0,
-        "deadline": 0,
-        "guesses": [],
-        "contested": False,
-        "winner": "",
-        "created_at": now,
-        "updated_at": now
-    }
-    return jsonify({"code": code})
-
-@app.route("/api/join", methods=["POST"])
-def api_join():
-    cleanup_rooms()
-    data = request.get_json(silent=True) or {}
-    code = str(data.get("code", "")).strip().upper()
-    pid = str(data.get("pid", "")).strip()
-    name = str(data.get("name", "Player")).strip()[:20] or "Player"
-    room = ROOMS.get(code)
-    if not room:
-        return jsonify({"error": "Room not found. Check the 4-letter code."}), 404
-    room["updated_at"] = time.time()
-    existing = next((p for p in room["players"] if p["pid"] == pid), None)
-    if existing:
-        existing["name"] = name
-    else:
-        room["players"].append({"pid": pid, "name": name, "score": 0})
-    return jsonify({"ok": True, "code": code})
-
-@app.route("/api/state")
-def api_state():
-    code = str(request.args.get("code", "")).strip().upper()
-    pid = str(request.args.get("pid", "")).strip()
-    room = ROOMS.get(code)
-    if not room:
-        return jsonify({"error": "Room closed or expired."}), 404
-    if not any(p["pid"] == pid for p in room["players"]):
-        return jsonify({"error": "You are no longer in this room."}), 403
-
-    now = time.time()
-    if room["phase"] == "guessing" and room["deadline"] and now >= room["deadline"]:
-        room["phase"] = "review"
-        room["updated_at"] = now
-
-    players = room["players"]
-    mgr_idx = room["manager_idx"] % len(players) if players else 0
-    manager_pid = players[mgr_idx]["pid"] if players else ""
-
-    return jsonify({
-        "code": room["code"],
-        "host_pid": room["host_pid"],
-        "manager_pid": manager_pid,
-        "players": players,
-        "umpire": room["umpire"],
-        "target": room["target"],
-        "phase": room["phase"],
-        "round": room["round"],
-        "question": room["question"],
-        "answer": room["answer"] if (pid == manager_pid or room["phase"] == "review") else "",
-        "deadline": room["deadline"],
-        "server_time": now,
-        "guesses": room["guesses"],
-        "contested": room["contested"],
-        "winner": room["winner"]
-    })
-
-@app.route("/api/action", methods=["POST"])
-def api_action():
-    data = request.get_json(silent=True) or {}
-    code = str(data.get("code", "")).strip().upper()
-    pid = str(data.get("pid", "")).strip()
-    action = str(data.get("action", "")).strip()
-    room = ROOMS.get(code)
-    if not room:
-        return jsonify({"error": "Room not found"}), 404
-
-    now = time.time()
-    room["updated_at"] = now
-    players = room["players"]
-    if not players:
-        return jsonify({"error": "Empty room"}), 400
-
-    mgr_idx = room["manager_idx"] % len(players)
-    manager_pid = players[mgr_idx]["pid"]
-    is_host = (pid == room["host_pid"])
-    is_mgr = (pid == manager_pid)
-
-    if action == "leave":
-        room["players"] = [p for p in players if p["pid"] != pid]
-        if not room["players"]:
-            ROOMS.pop(code, None)
-        elif room["host_pid"] == pid:
-            room["host_pid"] = room["players"][0]["pid"]
-        return jsonify({"ok": True})
-
-    if action == "kick" and is_host:
-        target = str(data.get("target_pid", ""))
-        room["players"] = [p for p in players if p["pid"] != target]
-        return jsonify({"ok": True})
-
-    if action == "settings" and is_host:
-        room["umpire"] = bool(data.get("umpire", False))
-        room["target"] = int(data.get("target", 25))
-        return jsonify({"ok": True})
-
-    if action == "start" and is_host:
-        for p in players:
-            p["score"] = 0
-        room["round"] = 1
-        room["manager_idx"] = 0
-        room["phase"] = "asking"
-        room["question"] = ""
-        room["answer"] = ""
-        room["guesses"] = []
-        room["contested"] = False
-        room["winner"] = ""
-        return jsonify({"ok": True})
-
-    if action == "ask" and is_mgr:
-        room["question"] = str(data.get("question", "")).strip()[:240]
-        room["answer"] = str(data.get("answer", "")).strip()[:120]
-        room["guesses"] = []
-        room["contested"] = False
-        room["asked_at"] = now
-        room["deadline"] = now + 30
-        room["phase"] = "guessing"
-        return jsonify({"ok": True})
-
-    if action == "guess" and room["phase"] == "guessing" and not is_mgr:
-        if not any(g["pid"] == pid for g in room["guesses"]):
-            player = next((p for p in players if p["pid"] == pid), None)
-            if player:
-                elapsed = round(max(0.1, now - room["asked_at"]), 2)
-                room["guesses"].append({
-                    "pid": pid,
-                    "name": player["name"],
-                    "guess": str(data.get("guess", "")).strip()[:120],
-                    "elapsed": elapsed
-                })
-                room["guesses"].sort(key=lambda x: x["elapsed"])
-        non_mgr_count = max(1, len(players) - 1)
-        if len(room["guesses"]) >= non_mgr_count:
-            room["phase"] = "review"
-        return jsonify({"ok": True})
-
-    if action == "close_guesses" and is_mgr:
-        room["phase"] = "review"
-        return jsonify({"ok": True})
-
-    if action == "contest" and not is_mgr and not room["umpire"]:
-        room["contested"] = True
-        return jsonify({"ok": True})
-
-    if action == "reask" and is_mgr:
-        room["phase"] = "asking"
-        room["question"] = ""
-        room["answer"] = ""
-        room["guesses"] = []
-        room["contested"] = False
-        return jsonify({"ok": True})
-
-    if action == "award" and is_mgr:
-        winner_pid = str(data.get("winner_pid", ""))
-        target_player = next((p for p in players if p["pid"] == winner_pid), None)
-        if target_player:
-            target_player["score"] += 5
-            if target_player["score"] >= room["target"]:
-                room["winner"] = target_player["name"]
-                room["phase"] = "gameover"
-                return jsonify({"ok": True})
-        room["round"] += 1
-        room["manager_idx"] = (room["manager_idx"] + 1) % len(players)
-        room["phase"] = "asking"
-        room["question"] = ""
-        room["answer"] = ""
-        room["guesses"] = []
-        room["contested"] = False
-        return jsonify({"ok": True})
-
-    if action == "next_round" and is_mgr:
-        room["round"] += 1
-        room["manager_idx"] = (room["manager_idx"] + 1) % len(players)
-        room["phase"] = "asking"
-        room["question"] = ""
-        room["answer"] = ""
-        room["guesses"] = []
-        room["contested"] = False
-        return jsonify({"ok": True})
-
-    return jsonify({"ok": True})
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 10000))
+    port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
