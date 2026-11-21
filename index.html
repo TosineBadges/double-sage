@@ -1,907 +1,976 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Double Sage — Pass & Play</title>
 <style>
   :root {
-    --bg: #070b14;
-    --card: #111827;
-    --card2: #1e293b;
+    --bg: #090d16;
+    --card: #121826;
+    --card2: #1a2234;
     --accent: #38bdf8;
-    --accent2: #f59e0b;
-    --green: #10b981;
+    --gold: #facc15;
+    --green: #22c55e;
     --red: #ef4444;
     --text: #f8fafc;
     --muted: #94a3b8;
   }
-  * { box-sizing: border-box; font-family: system-ui, -apple-system, sans-serif; }
-  body { margin: 0; background: var(--bg); color: var(--text); padding-bottom: 40px; }
-  .container { max-width: 680px; margin: 0 auto; padding: 14px; }
-  .card { background: var(--card); border: 1px solid #1f2937; border-radius: 14px; padding: 16px; margin-bottom: 14px; box-shadow: 0 8px 24px rgba(0,0,0,0.35); }
-  h1, h2, h3 { margin: 0 0 10px 0; }
-  .top-bar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; justify-content: space-between; background: #0f172a; padding: 10px 12px; border-bottom: 1px solid #1e293b; position: sticky; top: 0; z-index: 100; }
-  .btn { background: var(--accent); color: #04101d; border: none; border-radius: 10px; padding: 10px 14px; font-weight: 700; cursor: pointer; font-size: 14px; transition: transform .1s; }
-  .btn:active { transform: scale(0.97); }
-  .btn-secondary { background: var(--card2); color: var(--text); border: 1px solid #334155; }
-  .btn-green { background: var(--green); color: #031a11; }
+  * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  body { margin: 0; background: var(--bg); color: var(--text); min-height: 100vh; padding-bottom: 40px; }
+  header {
+    background: #0f172a; border-bottom: 1px solid #1e293b; padding: 10px 14px;
+    display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px;
+    position: sticky; top: 0; z-index: 50;
+  }
+  .brand { font-weight: 900; font-size: 18px; color: var(--gold); letter-spacing: 0.5px; }
+  .controls { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+  .pill {
+    background: #1e293b; color: #e2e8f0; border: 1px solid #334155;
+    padding: 6px 11px; border-radius: 999px; font-size: 12px; cursor: pointer; font-weight: 600;
+  }
+  .pill:active { transform: scale(0.97); }
+  .container { max-width: 640px; margin: 14px auto; padding: 0 12px; }
+  .card {
+    background: var(--card); border: 1px solid #1e293b; border-radius: 16px;
+    padding: 16px; margin-bottom: 14px; box-shadow: 0 10px 25px rgba(0,0,0,0.35);
+  }
+  h2, h3 { margin: 0 0 10px 0; }
+  label { display: block; font-size: 12px; color: var(--muted); margin: 10px 0 4px; font-weight: 600; }
+  input, select, textarea {
+    width: 100%; background: #0b1120; border: 1px solid #334155; color: var(--text);
+    padding: 10px 12px; border-radius: 10px; font-size: 15px; outline: none;
+  }
+  input:focus, select:focus, textarea:focus { border-color: var(--accent); }
+  .btn {
+    width: 100%; padding: 12px; border: none; border-radius: 12px; font-size: 15px;
+    font-weight: 800; cursor: pointer; margin-top: 10px; transition: 0.15s;
+  }
+  .btn-primary { background: linear-gradient(135deg, #0284c7, #38bdf8); color: #04101d; }
+  .btn-gold { background: linear-gradient(135deg, #eab308, #facc15); color: #1a1200; }
+  .btn-green { background: var(--green); color: #041f0e; }
   .btn-red { background: var(--red); color: #fff; }
-  .btn-amber { background: var(--accent2); color: #1c1002; }
-  .btn-sm { padding: 6px 10px; font-size: 12px; border-radius: 8px; }
-  input, select, textarea { width: 100%; background: #0b1220; color: var(--text); border: 1px solid #334155; border-radius: 10px; padding: 10px 12px; font-size: 14px; margin-bottom: 10px; }
-  label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 4px; font-weight: 600; }
-  .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-  .badge { display: inline-block; padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 700; background: #1e293b; color: var(--accent); }
-  .hint-box { background: rgba(56,189,248,0.12); border: 1px solid rgba(56,189,248,0.4); color: #bae6fd; padding: 10px 12px; border-radius: 10px; font-weight: 700; margin: 10px 0; }
-  .timer-box { font-size: 28px; font-weight: 800; color: var(--accent2); text-align: center; padding: 8px; background: #0b1220; border-radius: 12px; border: 1px solid #334155; margin: 10px 0; }
+  .btn-dark { background: #1e293b; color: #e2e8f0; border: 1px solid #334155; }
+  .btn-sm { width: auto; padding: 7px 12px; font-size: 12px; margin-top: 0; border-radius: 8px; }
+  .row { display: flex; gap: 8px; align-items: center; }
+  .row > * { flex: 1; }
+  .badge {
+    display: inline-block; background: #1e293b; color: var(--accent); padding: 4px 10px;
+    border-radius: 999px; font-size: 12px; font-weight: 700;
+  }
+  .hint-box {
+    background: #0f172a; border: 1px dashed var(--gold); color: var(--gold);
+    padding: 10px 12px; border-radius: 10px; font-weight: 700; font-size: 14px; margin: 10px 0;
+  }
+  .player-item {
+    display: flex; justify-content: space-between; align-items: center;
+    background: var(--card2); padding: 10px 12px; border-radius: 10px; margin-bottom: 8px;
+  }
+  .timer-bar {
+    font-size: 22px; font-weight: 900; color: var(--gold); text-align: center;
+    background: #0f172a; padding: 8px; border-radius: 10px; margin-bottom: 10px;
+  }
   .hidden { display: none !important; }
-  #introOverlay { position: fixed; inset: 0; z-index: 99990; background: #070b14; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 20px; text-align: center; }
-  #introOverlay img { max-width: 90%; max-height: 52vh; border-radius: 16px; border: 2px solid #38bdf8; box-shadow: 0 12px 35px rgba(56,189,248,0.25); object-fit: cover; }
-  #introOverlay button { position: relative; z-index: 999999 !important; pointer-events: auto !important; cursor: pointer; }
-  .modal-backdrop { position: fixed; inset: 0; background: rgba(2,6,23,0.85); z-index: 5000; display: flex; align-items: center; justify-content: center; padding: 14px; }
-  .modal-card { background: var(--card); border: 1px solid #334155; border-radius: 16px; max-width: 580px; width: 100%; max-height: 85vh; overflow-y: auto; padding: 18px; }
-  .score-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 10px; background: #0b1220; border-radius: 8px; margin-bottom: 6px; border: 1px solid #1e293b; }
+  #introOverlay {
+    position: fixed; inset: 0; background: #050811; z-index: 99999;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    padding: 20px; text-align: center; cursor: pointer;
+  }
+  #introSlideImg {
+    max-width: 92%; max-height: 60vh; border-radius: 18px; pointer-events: none;
+    box-shadow: 0 12px 40px rgba(56,189,248,0.35); object-fit: contain;
+  }
+  #introCrestFallback {
+    width: 150px; height: 150px; border-radius: 50%; pointer-events: none;
+    background: radial-gradient(circle, #1e293b, #090d16); border: 3px solid var(--gold);
+    display: flex; align-items: center; justify-content: center; font-size: 56px;
+    box-shadow: 0 0 35px rgba(250,204,21,0.45);
+  }
+  #introTitle { margin-top: 14px; font-size: 22px; font-weight: 900; color: var(--gold); pointer-events: none; }
+  #skipIntroBtn {
+    position: fixed; top: 16px; right: 16px; z-index: 2147483647;
+    pointer-events: auto; cursor: pointer; background: var(--gold); color: #000;
+    border: none; padding: 11px 20px; border-radius: 999px; font-weight: 900; font-size: 14px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.6);
+  }
+  .modal-bg {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.82); z-index: 10000;
+    display: flex; align-items: center; justify-content: center; padding: 16px;
+  }
+  .modal-box {
+    background: var(--card); border: 1px solid #334155; border-radius: 16px;
+    max-width: 520px; width: 100%; max-height: 85vh; overflow-y: auto; padding: 18px;
+  }
 </style>
 </head>
 <body>
 
-<div id="introOverlay">
-  <div style="color:#38bdf8;font-weight:800;letter-spacing:2px;font-size:13px;margin-bottom:8px;">DOUBLE SAGE ARENA</div>
-  <img id="introImg" src="double_sage_icon.jpg" alt="Double Sage" onerror="this.style.display='none'" />
-  <h2 id="introCaption" style="margin-top:14px;color:#f8fafc;">Welcome to Double Sage</h2>
-  <div class="row" style="justify-content:center;margin-top:12px;">
-    <button type="button" class="btn btn-green" onclick="unlockAudio()">🔊 Enable Loud Sound & Music</button>
-    <button type="button" class="btn btn-amber" onclick="forceCloseIntro()">Skip Intro ⏭</button>
-  </div>
+<div id="introOverlay" onclick="dismissIntroNow(event)">
+  <button id="skipIntroBtn" type="button" onclick="dismissIntroNow(event)" ontouchend="dismissIntroNow(event)">Skip Intro ⏭</button>
+  <img id="introSlideImg" src="./double_sage_icon.jpg" alt="Double Sage" onerror="handleIntroImgError(this)">
+  <div id="introCrestFallback" class="hidden">⚔️</div>
+  <div id="introTitle">DOUBLE SAGE — BATTLE OF MINDS</div>
+  <div style="color:#94a3b8;font-size:13px;margin-top:6px;pointer-events:none;">Tap anywhere or press Skip Intro to enter</div>
 </div>
 
-<div class="top-bar">
-  <div style="font-weight:900;color:var(--accent);font-size:16px;">⚡ DOUBLE SAGE</div>
-  <div class="row">
-    <button type="button" class="btn btn-secondary btn-sm" onclick="openHowToPlay()">📖 How to Play</button>
-    <button type="button" id="musicBtn" class="btn btn-secondary btn-sm" onclick="toggleMusic()">🎵 Music: ON</button>
-    <button type="button" id="sfxBtn" class="btn btn-secondary btn-sm" onclick="toggleSfx()">🔊 SFX: ON</button>
-    <input type="range" id="volSlider" min="0" max="1" step="0.05" value="0.9" style="width:70px;margin:0;" onchange="setVolume(this.value)" />
-    <label class="btn btn-secondary btn-sm" style="margin:0;cursor:pointer;">📂 Load Song
-      <input type="file" id="songPicker" accept="audio/*" style="display:none;" onchange="loadLocalSong(event)" />
+<audio id="bgMusic" src="./theme.mp3" loop preload="auto"></audio>
+
+<header>
+  <div class="brand">⚔️ DOUBLE SAGE</div>
+  <div class="controls">
+    <button class="pill" type="button" onclick="replayIntro()">🎬 Intro</button>
+    <button class="pill" type="button" onclick="openHowToPlay()">📖 How to Play</button>
+    <button class="pill" type="button" onclick="openQBModal()">📚 My QBs</button>
+    <button class="pill" id="musicToggleBtn" type="button" onclick="toggleMusic()">🎵 Music: ON</button>
+    <label class="pill" style="margin:0;display:inline-block;">
+      📂 Load Song
+      <input type="file" id="songUploadInput" accept="audio/*" style="display:none" onchange="handleSongUpload(this)">
     </label>
-    <button type="button" id="resetThemeBtn" class="btn btn-sm hidden" onclick="resetToDefaultTheme()">🔄 Default Theme</button>
-    <button type="button" class="btn btn-secondary btn-sm" onclick="openQbModal()">📚 My QB's</button>
+    <button class="pill hidden" id="resetThemeBtn" type="button" style="border-color:#38bdf8;color:#38bdf8;" onclick="resetDefaultTheme()">🔄 Default Theme</button>
+    <input type="range" id="volSlider" min="0" max="1" step="0.05" value="0.8" style="width:70px;padding:0;" oninput="setMasterVol(this.value)">
   </div>
-</div>
+</header>
 
 <div class="container">
-  <!-- SETUP SCREEN -->
-  <div id="setupScreen" class="card">
-    <h2>Start Pass & Play Match</h2>
-    <label>Game Mode</label>
-    <select id="gameMode" onchange="toggleModeFields()">
-      <option value="standard">Standard Mode (2 Players — Setter vs. Guesser + Contest)</option>
-      <option value="umpire">Umpire Mode (1 Umpire Organizer + 1 to 10 Simultaneous Players)</option>
-    </select>
 
-    <div id="standardNames">
-      <div class="row">
-        <div style="flex:1;">
-          <label>Player 1 Name</label>
-          <input type="text" id="p1Name" value="Player 1" />
-        </div>
-        <div style="flex:1;">
-          <label>Player 2 Name</label>
-          <input type="text" id="p2Name" value="Player 2" />
-        </div>
-      </div>
-    </div>
-
-    <div id="umpireSetup" class="hidden">
-      <label>Umpire / Organizer Name (Hosts Only — Earns 0 Pts)</label>
-      <input type="text" id="umpireName" value="Umpire" />
-      <label>Competing Players (Comma-separated, 1 to 10 players)</label>
-      <input type="text" id="umpirePlayersInput" placeholder="e.g. Tunde, Ada, Chidi, Zainab" value="Tunde, Ada, Chidi" />
-    </div>
-
-    <div class="row">
-      <div style="flex:1;">
-        <label>Number of Rounds / Questions</label>
-        <input type="number" id="totalRounds" min="1" max="30" value="5" />
-      </div>
-      <div style="flex:1;">
-        <label>Seconds per Question</label>
-        <input type="number" id="roundSeconds" min="10" max="120" value="30" />
-      </div>
-    </div>
-
-    <button type="button" class="btn" style="width:100%;font-size:16px;" onclick="startGame()">🚀 Start Game</button>
-  </div>
-
-  <!-- CREATOR & MONETIZATION HUB -->
-  <div id="creatorHub" class="card">
-    <h3>🏆 Live Tournaments & Creator Hub</h3>
-    <p style="font-size:13px;color:var(--muted);margin:0 0 10px 0;">Buy tournament tickets, unlock Pro QB Packs, or support the creator.</p>
-    <div class="row">
-      <input type="text" id="creatorPayLink" placeholder="Paste Paystack / Selar / Flutterwave link..." style="flex:1;margin:0;" />
-      <button type="button" class="btn btn-secondary btn-sm" onclick="saveCreatorLink()">Save Link</button>
-    </div>
-    <div style="margin-top:8px;">
-      <a id="activePayBtn" href="https://selar.co" target="_blank" class="btn btn-amber btn-sm" style="text-decoration:none;display:inline-block;">🎟 Buy Tournament Ticket / ☕ Support Creator</a>
-    </div>
-  </div>
-
-  <!-- ACTIVE GAME SCREEN -->
-  <div id="gameScreen" class="hidden">
+  <!-- SETUP VIEW -->
+  <div id="setupView">
     <div class="card">
-      <div class="row" style="justify-content:space-between;">
-        <span class="badge" id="roundBadge">Round 1 / 5</span>
-        <span class="badge" id="modeBadge" style="color:var(--accent2);">Standard Mode</span>
+      <h2>🎮 Pass & Play Setup</h2>
+      <label>Game Mode</label>
+      <select id="gameModeSelect" onchange="toggleUmpireNote()">
+        <option value="standard">Standard Mode (Setter vs. Guesser)</option>
+        <option value="umpire">Simultaneous Umpire Mode (1–10 Players)</option>
+      </select>
+      <div id="umpireModeNote" class="hidden" style="font-size:12px;color:var(--gold);margin-top:6px;">
+        🎙 In Umpire Mode, Player 1 is the Organizer (0 pts) and asks all competing players (1–10) at the exact same time!
       </div>
-      <div id="scoreboardBox" style="margin-top:10px;"></div>
+
+      <div class="row">
+        <div>
+          <label>Rounds / Questions</label>
+          <input id="roundsInput" type="number" value="5" min="1" max="30">
+        </div>
+        <div>
+          <label>Timer (sec)</label>
+          <input id="timerInput" type="number" value="30" min="10" max="120">
+        </div>
+      </div>
+
+      <label id="playersInputLabel">Players (Comma-separated, 2–10 players)</label>
+      <input id="playersInput" value="Player 1, Player 2" placeholder="e.g. Tunde, Chidi, Amaka">
+
+      <button class="btn btn-primary" type="button" onclick="startMatch()">🔥 Start Match</button>
     </div>
 
-    <!-- STEP 1: QUESTION SETTER / UMPIRE INPUT -->
-    <div id="setterPhase" class="card">
-      <h3 id="setterTitle">Setter: Enter Secret Question</h3>
-      <p id="setterSub" style="font-size:13px;color:var(--muted);">Keep the screen hidden from the guesser(s)!</p>
-
-      <div class="row" style="margin-bottom:8px;">
-        <select id="quickQbSelect" style="flex:1;margin:0;" onchange="pickFromQbSelect()">
-          <option value="">-- Load Question from My QB's --</option>
-        </select>
+    <div class="card">
+      <h3>🏆 Live Tournaments & Creator Hub</h3>
+      <p style="font-size:13px;color:var(--muted);margin:0 0 10px;">Buy official Pro QB Packs, enter paid weekend tournaments, or support Double Sage.</p>
+      <div id="creatorLinkDisplay" style="margin-bottom:8px;"></div>
+      <div class="row">
+        <input id="creatorUrlInput" placeholder="Paste Paystack / Selar / Flutterwave URL">
+        <button class="btn btn-dark btn-sm" type="button" onclick="saveCreatorUrl()">Save Link</button>
       </div>
+    </div>
+  </div>
 
+  <!-- ACTIVE MATCH VIEW -->
+  <div id="matchView" class="hidden">
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+        <div>
+          <span class="badge" id="modeBadge">STANDARD</span>
+          <span class="badge" id="roundBadge">Round 1/5</span>
+        </div>
+        <button class="pill" type="button" onclick="endMatchEarly()">🏠 End Match</button>
+      </div>
+      <div id="scoreboardArea" style="margin-top:12px;"></div>
+    </div>
+
+    <!-- ASKING PHASE -->
+    <div id="askingPhase" class="card hidden">
+      <h3 id="askerHeader">✍️ Setter: Enter Question & Secret Answer</h3>
+      <p style="font-size:12px;color:var(--muted);margin-top:0;">Keep your secret answer hidden from guessers!</p>
+      <div class="row" style="margin-bottom:6px;">
+        <select id="qbQuickSelect"><option value="">-- Load from My QBs --</option></select>
+        <button class="btn btn-dark btn-sm" type="button" onclick="pickFromQB()">Load QB</button>
+      </div>
       <label>Question</label>
-      <input type="text" id="qInput" placeholder="Type question (e.g. Who is the president of Nigeria? or 20 x 5)" />
-
+      <input id="liveQuestionInput" placeholder="e.g. Who is the president of Nigeria? or 20 * 5">
       <label>Secret Answer</label>
       <div class="row">
-        <input type="text" id="aInput" placeholder="Exact answer..." style="flex:1;margin:0;" />
-        <button type="button" class="btn btn-secondary btn-sm" onclick="suggestAnswerForInput('qInput','aInput','aiStatus')">✨ Suggest Answer</button>
+        <input id="liveAnswerInput" placeholder="Type secret answer">
+        <button class="btn btn-gold btn-sm" type="button" onclick="suggestAnswer('liveQuestionInput','liveAnswerInput','liveAiStatus')">✨ Suggest</button>
       </div>
-      <div id="aiStatus" style="font-size:12px;color:var(--accent);margin:6px 0 10px 0;"></div>
-
-      <button type="button" class="btn btn-green" style="width:100%;" onclick="lockQuestion()">🔒 Lock Question & Start Clock</button>
+      <div id="liveAiStatus" style="font-size:12px;color:var(--accent);margin-top:4px;"></div>
+      <button class="btn btn-primary" type="button" onclick="lockQuestionAndStartTimer()">📤 Lock Answer & Start Round</button>
     </div>
 
-    <!-- STEP 2: GUESSING PHASE -->
-    <div id="guessPhase" class="card hidden">
-      <h3 id="guesserHeader">Guesser's Turn</h3>
-      <div class="timer-box" id="timerDisplay">30s</div>
-      <div style="font-size:18px;font-weight:800;margin:8px 0;" id="displayQuestion"></div>
-      <div class="hint-box" id="displayHint">Hint: 1 word, 3 letters</div>
+    <!-- ANSWERING PHASE -->
+    <div id="answeringPhase" class="card hidden">
+      <div class="timer-bar" id="countdownDisplay">⏱ 30s</div>
+      <div id="activeGuesserBanner" class="badge" style="margin-bottom:8px;color:var(--gold);"></div>
+      <div style="font-size:18px;font-weight:800;margin-bottom:8px;" id="activeQuestionText"></div>
+      <div class="hint-box" id="activeHintText"></div>
 
-      <!-- Standard 1-Guesser Input -->
-      <div id="standardGuessBox">
-        <label>Your Answer</label>
-        <input type="text" id="guessInput" placeholder="Type your guess..." />
-        <button type="button" class="btn" style="width:100%;" onclick="submitStandardGuess()">✅ Submit Guess</button>
-      </div>
-
-      <!-- Umpire Simultaneous Multi-Player Pass/Tap Inputs -->
-      <div id="umpireGuessBox" class="hidden">
-        <p style="font-size:12px;color:var(--muted);margin-top:0;">All players answer simultaneously before time runs out! Each player submits their guess below:</p>
-        <div id="umpirePlayerInputs"></div>
-        <button type="button" class="btn btn-amber" style="width:100%;margin-top:8px;" onclick="finishUmpireRound()">🏁 Reveal & Score All Players</button>
-      </div>
+      <label>Enter Answer</label>
+      <input id="playerGuessInput" placeholder="Type guess here...">
+      <button class="btn btn-green" type="button" onclick="submitPassPlayGuess()">✅ Submit Answer</button>
+      <button class="btn btn-dark" type="button" onclick="skipCurrentGuesser()">⏭ Pass / Skip Turn</button>
     </div>
 
-    <!-- STEP 3: ROUND RESULT & CONTEST -->
-    <div id="resultPhase" class="card hidden">
-      <h3 id="resultHeadline">Round Result</h3>
-      <div id="resultDetails" style="margin:10px 0;font-size:14px;line-height:1.5;"></div>
+    <!-- REVIEW PHASE -->
+    <div id="reviewPhase" class="card hidden">
+      <h3>📊 Round Results</h3>
+      <div style="background:#0f172a;padding:10px;border-radius:10px;margin-bottom:10px;">
+        <div style="font-size:12px;color:var(--muted);">Correct Answer:</div>
+        <div style="font-size:18px;font-weight:900;color:var(--green);" id="revealAnswerText"></div>
+      </div>
+      <div id="roundResultsList"></div>
 
-      <div id="contestControls" class="hidden" style="background:#0b1220;padding:12px;border-radius:12px;border:1px solid #334155;margin:10px 0;">
-        <button type="button" id="contestBtn" class="btn btn-amber" style="width:100%;" onclick="triggerContest()">⚖️ Contest Ruling (Guesser)</button>
-        <div id="setterDecisionBox" class="hidden" style="margin-top:10px;">
-          <p style="font-size:13px;color:#fde68a;margin:0 0 8px 0;"><strong>Setter Ruling:</strong> Was the Guesser actually right?</p>
+      <div id="contestArea" class="hidden" style="margin-top:10px;">
+        <button id="contestBtn" class="btn btn-red" type="button" onclick="openContestPanel()">⚖️ Contest Ruling (Guesser Was Right!)</button>
+        <div id="setterApprovalBox" class="hidden" style="background:#1e293b;padding:12px;border-radius:12px;margin-top:8px;">
+          <div style="font-weight:800;color:var(--gold);margin-bottom:8px;">⚖️ Setter Approval: Was the Guesser actually right?</div>
           <div class="row">
-            <button type="button" class="btn btn-green" style="flex:1;" onclick="resolveContest(true)">✅ Accept Guesser is Right (+5 to Guesser)</button>
-            <button type="button" class="btn btn-red" style="flex:1;" onclick="resolveContest(false)">❌ Reject Contest (Setter Keeps +5)</button>
+            <button class="btn btn-green btn-sm" type="button" onclick="resolveContest(true)">✅ Accept Guesser (+5 Pts)</button>
+            <button class="btn btn-red btn-sm" type="button" onclick="resolveContest(false)">❌ Reject (Setter Keeps +5)</button>
           </div>
         </div>
       </div>
 
-      <button type="button" class="btn" style="width:100%;margin-top:8px;" onclick="nextRound()">Next Round ➡️</button>
+      <button class="btn btn-primary" type="button" onclick="advanceRound()">➡️ Next Round</button>
     </div>
-  </div>
 
-  <!-- FINAL PODIUM -->
-  <div id="finalScreen" class="card hidden">
-    <h2>🏆 Final Match Results</h2>
-    <div id="finalStandings" style="margin:12px 0;"></div>
-    <button type="button" class="btn" style="width:100%;" onclick="resetToLobby()">🔄 Play Again</button>
+    <!-- GAMEOVER PHASE -->
+    <div id="gameoverPhase" class="card hidden">
+      <h2 style="color:var(--gold);text-align:center;">🏆 MATCH COMPLETE!</h2>
+      <div id="finalPodium"></div>
+      <button class="btn btn-primary" type="button" onclick="endMatchEarly()">🔄 Play Again</button>
+    </div>
   </div>
 </div>
 
 <!-- HOW TO PLAY MODAL -->
-<div id="howToPlayModal" class="modal-backdrop hidden">
-  <div class="modal-card">
-    <div class="row" style="justify-content:space-between;">
-      <h3>📖 How to Play Double Sage</h3>
-      <button type="button" class="btn btn-secondary btn-sm" onclick="closeModal('howToPlayModal')">Close ✕</button>
+<div id="howToPlayModal" class="modal-bg hidden" onclick="if(event.target===this)this.classList.add('hidden')">
+  <div class="modal-box">
+    <div style="display:flex;justify-content:space-between;align-items:center;">
+      <h2 style="color:var(--gold);">📖 How to Play Double Sage</h2>
+      <button class="pill" type="button" onclick="document.getElementById('howToPlayModal').classList.add('hidden')">✕</button>
     </div>
-    <div style="font-size:14px;line-height:1.6;color:#e2e8f0;margin-top:10px;">
-      <p><strong>1. Smart Answer Hints:</strong> Every question automatically shows the exact word count, letter count, and digit count (only if digits exist). Example: <em>"Fried Egg"</em> shows <strong>2 words, 8 letters</strong>; <em>"459"</em> shows <strong>3 digits</strong>.</p>
-      <p><strong>2. Standard Mode (Setter vs. Guesser):</strong> Players take turns setting a secret question and guessing before the timer hits zero. Correct guesses earn <strong>+5 pts</strong> immediately; missed guesses award <strong>+5 pts</strong> to the Setter.</p>
-      <p><strong>3. Fair Contest & Approval:</strong> If a Guesser believes their spelling or synonym was judged unfairly, they tap <strong>⚖️ Contest Ruling</strong>. The Setter can accept it (transferring the +5 pts to the Guesser) or reject it.</p>
-      <p><strong>4. Simultaneous Umpire Mode:</strong> One Umpire hosts (earning 0 points) and asks <strong>1 to 10 players at once</strong>. Everyone who answers right earns <strong>+5 pts</strong> with their exact speed recorded. If nobody gets it, nobody scores!</p>
-      <p><strong>5. 📚 My QB's & ✨ AI Suggest:</strong> Save your own question banks, unlock Pro QB packs, or tap <strong>✨ Suggest Answer</strong> on trivia/math questions (personal questions stay private to you).</p>
-    </div>
+    <p style="font-size:14px;line-height:1.5;"><b>1. Standard Mode (Setter vs. Guesser):</b> Players take turns setting a secret question and answer. You get a smart hint showing word count, letter count, and digits (only when numbers are present). Match the answer before time runs out for <b>+5 pts</b>; miss and the Setter gets <b>+5 pts</b>. Think you were judged unfairly? Tap <b>⚖️ Contest</b> for Setter review!</p>
+    <p style="font-size:14px;line-height:1.5;"><b>2. Simultaneous Umpire Mode (1–10 Players):</b> The Umpire is the organizer (<b>0 points</b>) who sets total rounds and asks all competing players the exact same question at once. Everyone who gets it right earns <b>+5 pts</b> with their speed recorded; if nobody gets it, <b>0 points</b> are awarded.</p>
+    <p style="font-size:14px;line-height:1.5;"><b>3. Smart AI Helper & My QBs:</b> Tap <b>✨ Suggest</b> when writing questions to auto-solve math (like <code>20 * 5</code>) or pull factual answers (personal questions like <i>"What is my nickname?"</i> stay private). Save question sets in <b>📚 My QBs</b> or unlock Pro Packs!</p>
   </div>
 </div>
 
-<!-- MY QB's MODAL -->
-<div id="qbModal" class="modal-backdrop hidden">
-  <div class="modal-card">
-    <div class="row" style="justify-content:space-between;">
-      <h3>📚 My QB's & Pro Packs</h3>
-      <button type="button" class="btn btn-secondary btn-sm" onclick="closeModal('qbModal')">Close ✕</button>
+<!-- MY QBS MODAL -->
+<div id="qbModal" class="modal-bg hidden" onclick="if(event.target===this)this.classList.add('hidden')">
+  <div class="modal-box">
+    <div style="display:flex;justify-content:space-between;align-items:center;">
+      <h2 style="color:var(--accent);">📚 My QBs & Pro Packs</h2>
+      <button class="pill" type="button" onclick="document.getElementById('qbModal').classList.add('hidden')">✕</button>
     </div>
-    <p style="font-size:12px;color:var(--muted);">Add questions to your bank or unlock Pro Packs (try <code>NAIJA2026</code>, <code>FOOTYPRO</code>, <code>PARTYVIP</code>).</p>
 
-    <label>New QB Question</label>
-    <input type="text" id="qbQInput" placeholder="e.g. What is the capital of Nigeria?" />
+    <label>Add Question to My QB</label>
+    <input id="qbQInput" placeholder="Enter question">
+    <div class="row" style="margin-top:6px;">
+      <input id="qbAInput" placeholder="Enter answer">
+      <button class="btn btn-gold btn-sm" type="button" onclick="suggestAnswer('qbQInput','qbAInput','qbAiStatus')">✨ Suggest</button>
+    </div>
+    <div id="qbAiStatus" style="font-size:12px;color:var(--accent);margin-top:4px;"></div>
+    <button class="btn btn-primary btn-sm" type="button" style="margin-top:8px;" onclick="addQBItem()">➕ Save to My QB</button>
+
+    <label>🎟️ Unlock Pro QB Pack (e.g., NAIJA2026, FOOTYPRO, PARTYVIP, or DSPACK:...)</label>
     <div class="row">
-      <input type="text" id="qbAInput" placeholder="Answer..." style="flex:1;margin:0;" />
-      <button type="button" class="btn btn-secondary btn-sm" onclick="suggestAnswerForInput('qbQInput','qbAInput','qbAiStatus')">✨ Suggest Answer</button>
-      <button type="button" class="btn btn-green btn-sm" onclick="addQbItem()">➕ Save</button>
+      <input id="packCodeInput" placeholder="Enter pack code">
+      <button class="btn btn-green btn-sm" type="button" onclick="redeemPack()">Unlock</button>
     </div>
-    <div id="qbAiStatus" style="font-size:12px;color:var(--accent);margin:4px 0 10px 0;"></div>
+    <div style="margin-top:8px;">
+      <button class="btn btn-dark btn-sm" type="button" onclick="exportSellablePack()">📤 Export My QB as Sellable DSPACK Code</button>
+      <textarea id="exportedPackBox" class="hidden" rows="2" style="margin-top:6px;font-size:11px;" readonly></textarea>
+    </div>
 
-    <div class="row" style="margin:10px 0;">
-      <input type="text" id="packCodeInput" placeholder="Enter Pack Code or DSPACK:..." style="flex:1;margin:0;" />
-      <button type="button" class="btn btn-amber btn-sm" onclick="unlockPackCode()">🎟 Unlock</button>
-      <button type="button" class="btn btn-secondary btn-sm" onclick="exportQbCode()">📦 Export Code</button>
-    </div>
-    <div id="exportCodeBox" style="font-size:11px;word-break:break-all;color:#38bdf8;margin-bottom:8px;"></div>
-    <div id="qbListContainer" style="max-height:220px;overflow-y:auto;"></div>
+    <div id="qbListContainer" style="margin-top:12px;"></div>
   </div>
 </div>
-
-<audio id="bgAudio" src="theme.mp3" loop preload="auto"></audio>
 
 <script>
-// --- INTRO SLIDESHOW ---
-const introSlides = [
-  { img: 'double_sage_icon.jpg', text: 'Double Sage — Outsmart Your Rivals' },
-  { img: 'double_sage_battle.jpg', text: '1v1 Duels & 10-Player Simultaneous Arenas' },
-  { img: 'double_sage_banner.jpg', text: 'Smart Word, Letter & Digit Hints' },
-  { img: 'double_sage_tournament.jpg', text: 'Host Live Tournaments & Win Glory' }
+// --- INTRO SLIDESHOW WITH MULTI-CANDIDATE ASSET FALLBACK ---
+const INTRO_SLIDES = [
+  { candidates: ['./double_sage_icon.jpg', './double_sage_icon.png', './images/double_sage_icon.jpg', './static/double_sage_icon.jpg'], title: 'DOUBLE SAGE — BATTLE OF MINDS' },
+  { candidates: ['./double_sage_battle.jpg', './double_sage_battle.png', './images/double_sage_battle.jpg', './static/double_sage_battle.jpg'], title: 'OUTSMART RIVALS & BEAT THE CLOCK' },
+  { candidates: ['./double_sage_banner.jpg', './double_sage_banner.png', './images/double_sage_banner.jpg', './static/double_sage_banner.jpg'], title: 'SIMULTANEOUS UMPIRE & DUEL MODES' },
+  { candidates: ['./double_sage_tournament.jpg', './double_sage_tournament.png', './images/double_sage_tournament.jpg', './static/double_sage_tournament.jpg'], title: 'CLIMB THE LEADERBOARD TO VICTORY' }
 ];
 let slideIdx = 0;
-window.introTimer = setInterval(() => {
-  slideIdx++;
-  if (slideIdx >= introSlides.length) {
-    forceCloseIntro();
-    return;
-  }
-  const imgEl = document.getElementById('introImg');
-  const capEl = document.getElementById('introCaption');
-  if (imgEl) { imgEl.style.display = 'inline-block'; imgEl.src = introSlides[slideIdx].img; }
-  if (capEl) capEl.textContent = introSlides[slideIdx].text;
-}, 3000);
+let candidateIdx = 0;
+let slideInterval = null;
 
-function forceCloseIntro() {
-  if (window.introTimer) clearInterval(window.introTimer);
+function handleIntroImgError(imgEl) {
+  const slide = INTRO_SLIDES[slideIdx];
+  candidateIdx++;
+  if (slide && candidateIdx < slide.candidates.length) {
+    imgEl.src = slide.candidates[candidateIdx];
+  } else {
+    imgEl.classList.add('hidden');
+    const crest = document.getElementById('introCrestFallback');
+    if (crest) crest.classList.remove('hidden');
+  }
+}
+
+function showIntroSlide(idx) {
+  slideIdx = idx;
+  candidateIdx = 0;
+  const imgEl = document.getElementById('introSlideImg');
+  const crest = document.getElementById('introCrestFallback');
+  const titleEl = document.getElementById('introTitle');
+  if (crest) crest.classList.add('hidden');
+  if (imgEl) {
+    imgEl.classList.remove('hidden');
+    imgEl.src = INTRO_SLIDES[slideIdx].candidates[0];
+  }
+  if (titleEl) titleEl.textContent = INTRO_SLIDES[slideIdx].title;
+}
+
+function startIntroSlideshow() {
+  if (slideInterval) clearInterval(slideInterval);
+  showIntroSlide(0);
+  slideInterval = setInterval(() => {
+    const ov = document.getElementById('introOverlay');
+    if (!ov || ov.classList.contains('hidden')) {
+      clearInterval(slideInterval);
+      return;
+    }
+    if (slideIdx + 1 >= INTRO_SLIDES.length) {
+      dismissIntroNow();
+      return;
+    }
+    showIntroSlide(slideIdx + 1);
+  }, 3000);
+}
+
+function dismissIntroNow(e) {
+  if (e && e.stopPropagation) e.stopPropagation();
+  if (slideInterval) { clearInterval(slideInterval); slideInterval = null; }
   const ov = document.getElementById('introOverlay');
-  if (ov) ov.remove();
-  unlockAudio();
+  if (ov) ov.classList.add('hidden');
+  startThemeAudio();
 }
 
-// --- AUDIO ENGINE ---
-let musicOn = true, sfxOn = true, audioCtx = null, synthTimer = null, isCustomSong = false;
-function unlockAudio() {
-  if (!audioCtx) {
-    const AC = window.AudioContext || window.webkitAudioContext;
-    if (AC) audioCtx = new AC();
-  }
-  if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
-  const bg = document.getElementById('bgAudio');
-  if (bg && musicOn) {
-    bg.volume = parseFloat(document.getElementById('volSlider').value || 0.9);
-    bg.play().catch(() => { startSynthFallback(); });
-  }
+function replayIntro() {
+  const ov = document.getElementById('introOverlay');
+  if (ov) ov.classList.remove('hidden');
+  startIntroSlideshow();
 }
+
+// --- AUDIO ENGINE (theme.mp3 + Multi-Path Fallback + Synth + Load/Reset) ---
+let musicEnabled = true;
+let audioCtx = null;
+let synthTimer = null;
+const THEME_PATHS = ['./theme.mp3', './media/theme.mp3', './static/theme.mp3', './assets/theme.mp3'];
+let themePathIdx = 0;
+let customSongActive = false;
+
+function startThemeAudio() {
+  if (!musicEnabled) return;
+  const bg = document.getElementById('bgMusic');
+  if (!bg) return;
+  bg.volume = parseFloat(document.getElementById('volSlider').value || 0.8);
+  bg.play().catch(() => {
+    if (!customSongActive && themePathIdx + 1 < THEME_PATHS.length) {
+      themePathIdx++;
+      bg.src = THEME_PATHS[themePathIdx];
+      bg.load();
+      bg.play().catch(() => startSynthFallback());
+    } else {
+      startSynthFallback();
+    }
+  });
+}
+
 function startSynthFallback() {
-  if (synthTimer || !musicOn) return;
-  const notes = [130.81, 164.81, 196.0, 261.63, 220.0, 196.0];
-  let step = 0;
-  synthTimer = setInterval(() => {
-    if (!musicOn || !audioCtx || audioCtx.state !== 'running') return;
-    const osc = audioCtx.createOscillator();
-    const g = audioCtx.createGain();
-    osc.type = 'triangle';
-    osc.frequency.value = notes[step % notes.length];
-    const vol = parseFloat(document.getElementById('volSlider').value || 0.9) * 0.25;
-    g.gain.setValueAtTime(vol, audioCtx.currentTime);
-    g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.22);
-    osc.connect(g); g.connect(audioCtx.destination);
-    osc.start(); osc.stop(audioCtx.currentTime + 0.24);
-    step++;
-  }, 280);
+  if (synthTimer || !musicEnabled) return;
+  try {
+    audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+    const notes = [261.63, 329.63, 392.00, 523.25, 392.00, 329.63];
+    let step = 0;
+    synthTimer = setInterval(() => {
+      if (!musicEnabled) return;
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = 'triangle';
+      osc.frequency.value = notes[step % notes.length];
+      gain.gain.value = 0.04 * parseFloat(document.getElementById('volSlider').value || 0.8);
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.start();
+      osc.stop(audioCtx.currentTime + 0.22);
+      step++;
+    }, 450);
+  } catch (e) {}
 }
+
 function toggleMusic() {
-  musicOn = !musicOn;
-  document.getElementById('musicBtn').textContent = musicOn ? '🎵 Music: ON' : '🎵 Music: OFF';
-  const bg = document.getElementById('bgAudio');
-  if (!musicOn) { if (bg) bg.pause(); }
-  else { unlockAudio(); }
+  musicEnabled = !musicEnabled;
+  const btn = document.getElementById('musicToggleBtn');
+  const bg = document.getElementById('bgMusic');
+  btn.textContent = musicEnabled ? '🎵 Music: ON' : '🎵 Music: OFF';
+  if (musicEnabled) {
+    startThemeAudio();
+  } else {
+    if (bg) bg.pause();
+    if (synthTimer) { clearInterval(synthTimer); synthTimer = null; }
+  }
 }
-function toggleSfx() {
-  sfxOn = !sfxOn;
-  document.getElementById('sfxBtn').textContent = sfxOn ? '🔊 SFX: ON' : '🔊 SFX: OFF';
-}
-function setVolume(v) {
-  const bg = document.getElementById('bgAudio');
+
+function setMasterVol(v) {
+  const bg = document.getElementById('bgMusic');
   if (bg) bg.volume = parseFloat(v);
 }
-function loadLocalSong(e) {
-  const file = e.target.files && e.target.files[0];
-  if (!file) return;
+
+function handleSongUpload(inp) {
+  if (!inp.files || !inp.files[0]) return;
+  customSongActive = true;
   if (synthTimer) { clearInterval(synthTimer); synthTimer = null; }
-  const bg = document.getElementById('bgAudio');
-  bg.src = URL.createObjectURL(file);
+  const bg = document.getElementById('bgMusic');
+  bg.src = URL.createObjectURL(inp.files[0]);
   bg.loop = true;
-  isCustomSong = true;
+  if (musicEnabled) bg.play().catch(() => {});
   document.getElementById('resetThemeBtn').classList.remove('hidden');
-  unlockAudio();
 }
-function resetToDefaultTheme() {
-  const inp = document.getElementById('songPicker');
+
+function resetDefaultTheme() {
+  customSongActive = false;
+  themePathIdx = 0;
+  const inp = document.getElementById('songUploadInput');
   if (inp) inp.value = '';
-  const bg = document.getElementById('bgAudio');
+  const bg = document.getElementById('bgMusic');
   bg.pause();
-  bg.src = 'theme.mp3';
+  bg.src = THEME_PATHS[0];
   bg.loop = true;
   bg.load();
-  isCustomSong = false;
+  if (musicEnabled) startThemeAudio();
   document.getElementById('resetThemeBtn').classList.add('hidden');
-  if (musicOn) unlockAudio();
 }
-function playBeep(freq = 520, dur = 0.12) {
-  if (!sfxOn) return;
-  if (!audioCtx) unlockAudio();
-  if (!audioCtx) return;
-  const osc = audioCtx.createOscillator();
-  const g = audioCtx.createGain();
-  osc.frequency.value = freq;
-  g.gain.setValueAtTime(0.3, audioCtx.currentTime);
-  g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + dur);
-  osc.connect(g); g.connect(audioCtx.destination);
-  osc.start(); osc.stop(audioCtx.currentTime + dur);
-}
-document.addEventListener('pointerdown', unlockAudio, { once: true });
 
-// --- SMART HINT GENERATOR (WORDS, LETTERS, CONDITIONAL DIGITS) ---
-function buildSmartHint(ans) {
-  const clean = (ans || '').trim();
-  if (!clean) return 'No answer set';
-  const words = clean.split(/\s+/).filter(Boolean);
-  const letters = (clean.match(/[a-zA-Z]/g) || []).length;
-  const digits = (clean.match(/[0-9]/g) || []).length;
+// --- SMART HINT BUILDER (WORDS, LETTERS, CONDITIONAL DIGITS) ---
+function buildSmartHint(answer) {
+  const raw = String(answer || '').trim();
+  if (!raw) return '';
+  const words = raw.split(/\s+/).filter(Boolean);
+  const wordCount = words.length;
+  let letters = 0;
+  let digits = 0;
+  for (let i = 0; i < raw.length; i++) {
+    const ch = raw[i];
+    if (/[a-zA-Z]/.test(ch)) letters++;
+    else if (/[0-9]/.test(ch)) digits++;
+  }
   const parts = [];
   if (letters > 0) {
-    parts.push(`${words.length} ${words.length === 1 ? 'word' : 'words'}`);
-    parts.push(`${letters} ${letters === 1 ? 'letter' : 'letters'}`);
-  } else if (words.length > 1) {
-    parts.push(`${words.length} groups`);
+    parts.push(wordCount + (wordCount === 1 ? ' word' : ' words'));
+    parts.push(letters + (letters === 1 ? ' letter' : ' letters'));
   }
   if (digits > 0) {
-    parts.push(`${digits} ${digits === 1 ? 'digit' : 'digits'}`);
+    parts.push(digits + (digits === 1 ? ' digit' : ' digits'));
   }
-  return parts.length ? parts.join(', ') : `${clean.length} characters`;
+  return parts.length ? parts.join(', ') : (wordCount + (wordCount === 1 ? ' word' : ' words'));
 }
 
-// --- SMART AI SUGGESTED ANSWER (MATH + ACCURATE FACTS + PERSONAL GUARD) ---
-const BUILTIN_FACTS = [
-  { keys: ['president of nigeria'], ans: 'Bola Ahmed Tinubu' },
-  { keys: ['vice president of nigeria'], ans: 'Kashim Shettima' },
-  { keys: ['capital of nigeria'], ans: 'Abuja' },
-  { keys: ['capital of ghana'], ans: 'Accra' },
-  { keys: ['capital of kenya'], ans: 'Nairobi' },
-  { keys: ['capital of south africa'], ans: 'Pretoria' },
-  { keys: ['capital of france'], ans: 'Paris' },
-  { keys: ['capital of japan'], ans: 'Tokyo' },
-  { keys: ['capital of uk', 'capital of united kingdom', 'capital of england'], ans: 'London' },
-  { keys: ['president of usa', 'president of the united states', 'us president'], ans: 'Donald Trump' },
-  { keys: ['richest man in africa', 'richest person in africa'], ans: 'Aliko Dangote' },
-  { keys: ['tallest mountain'], ans: 'Mount Everest' },
-  { keys: ['largest ocean'], ans: 'Pacific Ocean' },
-  { keys: ['largest planet'], ans: 'Jupiter' },
-  { keys: ['speed of light'], ans: '299792458' }
-];
+function normalizeAnswer(text) {
+  return String(text || '').toLowerCase().replace(/[^\w\s]/g, '').replace(/\s+/g, ' ').trim();
+}
 
-function evaluateMathQuestion(q) {
-  let expr = q.toLowerCase()
-    .replace(/what is|calculate|solve|equals|=|\?/g, '')
-    .replace(/(\d)\s*[x×]\s*(\d)/g, '$1*$2')
-    .replace(/÷/g, '/')
-    .trim();
-  if (/^[0-9+\-*/().\s]+$/.test(expr) && /[+\-*/]/.test(expr)) {
+// --- SMART AI SUGGESTED ANSWER & MATH SOLVER ---
+const FACT_BANK = {
+  'president of nigeria': 'Bola Ahmed Tinubu',
+  'capital of nigeria': 'Abuja',
+  'capital of france': 'Paris',
+  'capital of japan': 'Tokyo',
+  'capital of uk': 'London',
+  'capital of united kingdom': 'London',
+  'capital of usa': 'Washington DC',
+  'capital of united states': 'Washington DC',
+  'president of usa': 'Donald Trump',
+  'president of the united states': 'Donald Trump',
+  'tallest mountain': 'Mount Everest',
+  'largest ocean': 'Pacific Ocean',
+  'fastest land animal': 'Cheetah',
+  'red planet': 'Mars'
+};
+
+async function suggestAnswer(qId, aId, statusId) {
+  const qRaw = document.getElementById(qId).value.trim();
+  const statusEl = document.getElementById(statusId);
+  const ansEl = document.getElementById(aId);
+  if (!qRaw) { statusEl.textContent = 'Type a question first.'; return; }
+
+  const lower = qRaw.toLowerCase();
+  if (/(my|me|i|mine|our|we|us|nickname|favorite|favourite|birthday|girlfriend|boyfriend|crush)/i.test(lower)) {
+    statusEl.textContent = '🔒 Personal question detected — enter your own secret answer!';
+    return;
+  }
+
+  const cleanedMath = lower.replace(/what is|calculate|solve|=|\?/g, '').replace(/x/g, '*').replace(/÷/g, '/').trim();
+  if (/^[0-9+\-*/().\s]+$/.test(cleanedMath) && /[0-9]/.test(cleanedMath)) {
     try {
-      const val = Function('"use strict";return (' + expr + ')')();
+      const val = Function('"use strict";return (' + cleanedMath + ')')();
       if (typeof val === 'number' && isFinite(val)) {
-        return Number.isInteger(val) ? String(val) : String(Math.round(val * 10000) / 10000);
+        ansEl.value = String(Number.isInteger(val) ? val : Math.round(val * 100) / 100);
+        statusEl.textContent = '✅ Solved math expression!';
+        return;
       }
     } catch (e) {}
   }
-  return null;
-}
 
-function isPersonalQuestion(q) {
-  const lower = ' ' + q.toLowerCase().replace(/[^a-z0-9\s]/g, ' ') + ' ';
-  const personalTokens = [' my ', ' me ', ' i ', ' mine ', ' myself ', ' our ', ' we ', ' nickname ', ' birthday ', ' favorite ', ' favourite ', ' crush ', ' best friend ', ' phone number ', ' password '];
-  return personalTokens.some(t => lower.includes(t));
-}
-
-async function suggestAnswerForInput(qId, aId, statusId) {
-  const q = document.getElementById(qId).value.trim();
-  const statusEl = document.getElementById(statusId);
-  const aEl = document.getElementById(aId);
-  if (!q) { statusEl.textContent = 'Type a question first!'; return; }
-
-  if (isPersonalQuestion(q)) {
-    statusEl.textContent = '🔒 Personal question detected — type your own secret answer!';
-    return;
-  }
-
-  const mathAns = evaluateMathQuestion(q);
-  if (mathAns !== null) {
-    aEl.value = mathAns;
-    statusEl.textContent = `✅ Math solved: ${mathAns}`;
-    return;
-  }
-
-  const lowerQ = q.toLowerCase();
-  for (const item of BUILTIN_FACTS) {
-    if (item.keys.some(k => lowerQ.includes(k))) {
-      aEl.value = item.ans;
-      statusEl.textContent = `✨ Suggested: ${item.ans}`;
+  for (const [k, v] of Object.entries(FACT_BANK)) {
+    if (lower.includes(k)) {
+      ansEl.value = v;
+      statusEl.textContent = '✅ Suggested factual answer!';
       return;
     }
   }
 
-  statusEl.textContent = '⏳ Searching knowledge base...';
+  statusEl.textContent = '🔍 Searching factual answer...';
   try {
-    const cleanTopic = q.replace(/^(who is|who was|what is|what was|where is|when was|name the|the)\s+/i, '').replace(/\?+$/, '').trim();
-    const res = await fetch(`https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(cleanTopic)}`);
-    if (res.ok) {
-      const data = await res.json();
-      if (data && data.extract) {
-        // Extract actual answer from first sentence instead of echoing the question title
-        const firstSent = data.extract.split('.')[0];
-        const isMatch = firstSent.match(/\b(?:is|was|are|were)\s+([A-Z][a-zA-Z0-9\s\-']{1,40})/);
-        if (isMatch && isMatch[1] && data.title.toLowerCase().includes(cleanTopic.toLowerCase())) {
-          const extracted = isMatch[1].split(',')[0].trim();
-          aEl.value = extracted;
-          statusEl.textContent = `✨ Suggested: ${extracted}`;
-          return;
-        }
-        if (data.title && !lowerQ.includes(data.title.toLowerCase())) {
-          aEl.value = data.title;
-          statusEl.textContent = `✨ Suggested: ${data.title}`;
-          return;
-        }
+    const query = qRaw.replace(/^(who is|what is|where is|when was|who was|the)\s+/i, '').replace(/\?/g, '').trim();
+    const res = await fetch('https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=' + encodeURIComponent(query) + '&format=json&origin=*');
+    const data = await res.json();
+    const hits = (data.query && data.query.search) || [];
+    if (hits.length > 0) {
+      let best = hits[0].title;
+      if (best.toLowerCase().includes(query.toLowerCase()) && hits.length > 1) {
+        best = hits[1].title;
       }
+      ansEl.value = best.replace(/\s*\(.*?\)\s*/g, '').trim();
+      statusEl.textContent = '✅ Suggested from knowledge base!';
+    } else {
+      statusEl.textContent = 'No exact match found — type your answer manually.';
     }
-    statusEl.textContent = 'Could not auto-detect a short answer — enter your preferred answer.';
-  } catch (err) {
-    statusEl.textContent = 'Offline or unavailable — type your answer manually.';
+  } catch (e) {
+    statusEl.textContent = 'Offline — type your answer manually.';
   }
 }
 
-// --- QB'S & PACKS ---
-const STARTER_QB = [
-  { q: 'Who is the president of Nigeria?', a: 'Bola Ahmed Tinubu' },
-  { q: 'What is 20 x 5?', a: '100' },
-  { q: 'What is the capital of Nigeria?', a: 'Abuja' }
-];
+// --- MY QBS & PRO PACKS ---
 const PRO_PACKS = {
-  NAIJA2026: [
-    { q: 'Which Nigerian artist won the Best African Music Performance Grammy in 2024?', a: 'Tyla' },
-    { q: 'What is the currency of Nigeria?', a: 'Naira' },
-    { q: 'Which state is known as the Gateway State in Nigeria?', a: 'Ogun' }
+  'NAIJA2026': [
+    { q: 'Who is the president of Nigeria?', a: 'Bola Ahmed Tinubu' },
+    { q: 'What is the capital city of Nigeria?', a: 'Abuja' },
+    { q: 'What year did Nigeria gain independence?', a: '1960' },
+    { q: 'What is the largest city by population in Nigeria?', a: 'Lagos' }
   ],
-  FOOTYPRO: [
+  'FOOTYPRO': [
     { q: 'Which country won the 2022 FIFA World Cup?', a: 'Argentina' },
-    { q: 'Who has won the most Ballon dOr awards?', a: 'Lionel Messi' }
+    { q: 'Who has won the most Ballon dOr awards?', a: 'Lionel Messi' },
+    { q: 'Which club has won the most UEFA Champions League titles?', a: 'Real Madrid' },
+    { q: 'How many players are on the pitch for one football team?', a: '11' }
   ],
-  PARTYVIP: [
-    { q: 'What has keys that open no locks?', a: 'Piano' },
-    { q: 'How many months have 28 days?', a: '12' }
+  'PARTYVIP': [
+    { q: 'What is 25 * 4?', a: '100' },
+    { q: 'How many days are in a leap year?', a: '366' },
+    { q: 'Which planet is known as the Red Planet?', a: 'Mars' },
+    { q: 'What gas do plants absorb from the atmosphere?', a: 'Carbon Dioxide' }
   ]
 };
 
-function getMyQb() {
-  try {
-    const saved = JSON.parse(localStorage.getItem('ds_my_qb') || 'null');
-    return Array.isArray(saved) && saved.length ? saved : [...STARTER_QB];
-  } catch (e) { return [...STARTER_QB]; }
+function getQB() {
+  try { return JSON.parse(localStorage.getItem('ds_my_qb') || '[]'); } catch (e) { return []; }
 }
-function saveMyQb(list) {
+function saveQB(list) {
   localStorage.setItem('ds_my_qb', JSON.stringify(list));
-  renderQbList();
+  renderQB();
 }
-function renderQbList() {
-  const list = getMyQb();
-  const sel = document.getElementById('quickQbSelect');
-  if (sel) {
-    sel.innerHTML = '<option value="">-- Load Question from My QB's --</option>' +
-      list.map((item, idx) => `<option value="${idx}">${item.q}</option>`).join('');
-  }
-  const cont = document.getElementById('qbListContainer');
-  if (cont) {
-    cont.innerHTML = list.map((item, idx) => `
-      <div class="score-row">
-        <div style="font-size:13px;"><strong>${item.q}</strong><br><span style="color:var(--accent);">Ans: ${item.a}</span></div>
-        <button type="button" class="btn btn-red btn-sm" onclick="deleteQbItem(${idx})">✕</button>
-      </div>
-    `).join('');
-  }
+function openQBModal() {
+  renderQB();
+  document.getElementById('qbModal').classList.remove('hidden');
 }
-function addQbItem() {
+function addQBItem() {
   const q = document.getElementById('qbQInput').value.trim();
   const a = document.getElementById('qbAInput').value.trim();
   if (!q || !a) return;
-  const list = getMyQb();
-  list.unshift({ q, a });
-  saveMyQb(list);
+  const list = getQB();
+  list.push({ q, a });
+  saveQB(list);
   document.getElementById('qbQInput').value = '';
   document.getElementById('qbAInput').value = '';
 }
-function deleteQbItem(idx) {
-  const list = getMyQb();
+function deleteQBItem(idx) {
+  const list = getQB();
   list.splice(idx, 1);
-  saveMyQb(list);
+  saveQB(list);
 }
-function pickFromQbSelect() {
-  const idx = document.getElementById('quickQbSelect').value;
-  if (idx === '') return;
-  const item = getMyQb()[parseInt(idx)];
-  if (item) {
-    document.getElementById('qInput').value = item.q;
-    document.getElementById('aInput').value = item.a;
-  }
-}
-function unlockPackCode() {
+function redeemPack() {
   const raw = document.getElementById('packCodeInput').value.trim();
   if (!raw) return;
   const upper = raw.toUpperCase();
-  const list = getMyQb();
+  const list = getQB();
   if (PRO_PACKS[upper]) {
-    saveMyQb([...PRO_PACKS[upper], ...list]);
-    alert(`Unlocked ${upper}! Added ${PRO_PACKS[upper].length} questions.`);
-  } else if (raw.startsWith('DSPACK:')) {
+    PRO_PACKS[upper].forEach(item => list.push(item));
+    saveQB(list);
+    alert('Unlocked ' + PRO_PACKS[upper].length + ' questions from ' + upper + '!');
+    document.getElementById('packCodeInput').value = '';
+    return;
+  }
+  if (raw.startsWith('DSPACK:')) {
     try {
       const decoded = JSON.parse(atob(raw.slice(7)));
       if (Array.isArray(decoded)) {
-        saveMyQb([...decoded, ...list]);
-        alert(`Imported ${decoded.length} custom questions!`);
+        decoded.forEach(item => { if (item.q && item.a) list.push({ q: item.q, a: item.a }); });
+        saveQB(list);
+        alert('Imported ' + decoded.length + ' custom pack questions!');
+        document.getElementById('packCodeInput').value = '';
+        return;
       }
-    } catch (e) { alert('Invalid DSPACK code.'); }
-  } else {
-    alert('Invalid Pack Code.');
+    } catch (e) {}
+  }
+  alert('Invalid pack code.');
+}
+function exportSellablePack() {
+  const list = getQB();
+  if (!list.length) { alert('Add questions to My QB first!'); return; }
+  const code = 'DSPACK:' + btoa(JSON.stringify(list));
+  const box = document.getElementById('exportedPackBox');
+  box.value = code;
+  box.classList.remove('hidden');
+  box.select();
+}
+function renderQB() {
+  const list = getQB();
+  const container = document.getElementById('qbListContainer');
+  const sel = document.getElementById('qbQuickSelect');
+  sel.innerHTML = '<option value="">-- Load from My QBs (' + list.length + ') --</option>';
+  container.innerHTML = '';
+  list.forEach((item, i) => {
+    const opt = document.createElement('option');
+    opt.value = i;
+    opt.textContent = item.q;
+    sel.appendChild(opt);
+
+    const row = document.createElement('div');
+    row.className = 'player-item';
+    row.innerHTML = '<div style="font-size:13px;"><b>' + escapeHtml(item.q) + '</b><br><span style="color:var(--green);">Ans: ' + escapeHtml(item.a) + '</span></div>' +
+      '<button class="pill" type="button" onclick="deleteQBItem(' + i + ')">🗑</button>';
+    container.appendChild(row);
+  });
+}
+function pickFromQB() {
+  const idx = document.getElementById('qbQuickSelect').value;
+  if (idx === '') return;
+  const item = getQB()[parseInt(idx, 10)];
+  if (item) {
+    document.getElementById('liveQuestionInput').value = item.q;
+    document.getElementById('liveAnswerInput').value = item.a;
   }
 }
-function exportQbCode() {
-  const code = 'DSPACK:' + btoa(JSON.stringify(getMyQb()));
-  document.getElementById('exportCodeBox').textContent = code;
-}
 
-// --- MODALS & CREATOR LINK ---
-function openHowToPlay() { document.getElementById('howToPlayModal').classList.remove('hidden'); }
-function openQbModal() { renderQbList(); document.getElementById('qbModal').classList.remove('hidden'); }
-function closeModal(id) { document.getElementById(id).classList.add('hidden'); }
-function saveCreatorLink() {
-  const url = document.getElementById('creatorPayLink').value.trim();
+function saveCreatorUrl() {
+  const url = document.getElementById('creatorUrlInput').value.trim();
+  localStorage.setItem('ds_creator_url', url);
+  renderCreatorUrl();
+}
+function renderCreatorUrl() {
+  const url = localStorage.getItem('ds_creator_url') || '';
+  const box = document.getElementById('creatorLinkDisplay');
   if (url) {
-    localStorage.setItem('ds_pay_link', url);
-    document.getElementById('activePayBtn').href = url;
-    alert('Creator payment link saved!');
+    box.innerHTML = '<a href="' + escapeHtml(url) + '" target="_blank" rel="noopener" class="btn btn-gold" style="display:block;text-align:center;text-decoration:none;">🎟️ Buy Tournament Ticket / Support Creator</a>';
+  } else {
+    box.innerHTML = '';
   }
 }
-(function initSavedState() {
-  const savedUrl = localStorage.getItem('ds_pay_link');
-  if (savedUrl) {
-    document.getElementById('creatorPayLink').value = savedUrl;
-    document.getElementById('activePayBtn').href = savedUrl;
-  }
-  renderQbList();
-})();
+function openHowToPlay() {
+  document.getElementById('howToPlayModal').classList.remove('hidden');
+}
+function escapeHtml(str) {
+  return String(str || '').replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]));
+}
 
-// --- GAME ENGINE ---
+// --- PASS & PLAY GAME STATE ---
 let state = {
   mode: 'standard',
-  players: [], // { name, score, totalTime }
-  umpireName: 'Umpire',
   totalRounds: 5,
-  roundSeconds: 30,
   currentRound: 1,
+  timerSec: 30,
+  players: [],
   setterIdx: 0,
-  guesserIdx: 1,
-  currentQ: '',
-  currentA: '',
-  timerInt: null,
-  timeLeft: 30,
-  questionStartTs: 0,
-  lastAwardedTo: null // 'guesser' or 'setter'
+  guesserQueue: [],
+  currentGuesserPos: 0,
+  question: '',
+  answer: '',
+  hint: '',
+  submissions: [],
+  lastAwardedIdx: -1
 };
+let roundInterval = null;
+let turnStartMs = 0;
 
-function toggleModeFields() {
-  const m = document.getElementById('gameMode').value;
-  document.getElementById('standardNames').classList.toggle('hidden', m !== 'standard');
-  document.getElementById('umpireSetup').classList.toggle('hidden', m !== 'umpire');
+function toggleUmpireNote() {
+  const mode = document.getElementById('gameModeSelect').value;
+  document.getElementById('umpireModeNote').classList.toggle('hidden', mode !== 'umpire');
+  document.getElementById('playersInputLabel').textContent = mode === 'umpire'
+    ? 'Players (First name = Umpire Organizer [0 pts], plus 1–10 players)'
+    : 'Players (Comma-separated, 2–10 players)';
 }
 
-function startGame() {
-  unlockAudio();
-  const mode = document.getElementById('gameMode').value;
-  const rounds = Math.max(1, Math.min(30, parseInt(document.getElementById('totalRounds').value) || 5));
-  const secs = Math.max(10, Math.min(120, parseInt(document.getElementById('roundSeconds').value) || 30));
+function startMatch() {
+  const mode = document.getElementById('gameModeSelect').value;
+  const rounds = Math.max(1, Math.min(30, parseInt(document.getElementById('roundsInput').value || 5, 10)));
+  const timerSec = Math.max(10, Math.min(120, parseInt(document.getElementById('timerInput').value || 30, 10)));
+  const names = document.getElementById('playersInput').value.split(',').map(s => s.trim()).filter(Boolean);
 
-  state.mode = mode;
-  state.totalRounds = rounds;
-  state.roundSeconds = secs;
-  state.currentRound = 1;
-
-  if (mode === 'standard') {
-    const p1 = document.getElementById('p1Name').value.trim() || 'Player 1';
-    const p2 = document.getElementById('p2Name').value.trim() || 'Player 2';
-    state.players = [
-      { name: p1, score: 0, totalTime: 0 },
-      { name: p2, score: 0, totalTime: 0 }
-    ];
-    state.setterIdx = 0;
-    state.guesserIdx = 1;
-  } else {
-    state.umpireName = document.getElementById('umpireName').value.trim() || 'Umpire';
-    const rawNames = document.getElementById('umpirePlayersInput').value.split(',').map(s => s.trim()).filter(Boolean).slice(0, 10);
-    if (!rawNames.length) { alert('Enter at least 1 competing player!'); return; }
-    state.players = rawNames.map(n => ({ name: n, score: 0, totalTime: 0 }));
+  if (names.length < 2) {
+    alert(mode === 'umpire' ? 'Enter the Umpire name plus at least 1 competing player.' : 'Enter at least 2 players separated by commas.');
+    return;
   }
 
-  document.getElementById('setupScreen').classList.add('hidden');
-  document.getElementById('creatorHub').classList.add('hidden');
-  document.getElementById('finalScreen').classList.add('hidden');
-  document.getElementById('gameScreen').classList.remove('hidden');
-  prepareSetterPhase();
+  state = {
+    mode,
+    totalRounds: rounds,
+    currentRound: 1,
+    timerSec,
+    players: names.slice(0, 11).map((name, idx) => ({
+      name,
+      score: 0,
+      totalTime: 0,
+      isUmpire: (mode === 'umpire' && idx === 0)
+    })),
+    setterIdx: 0,
+    guesserQueue: [],
+    currentGuesserPos: 0,
+    question: '',
+    answer: '',
+    hint: '',
+    submissions: [],
+    lastAwardedIdx: -1
+  };
+
+  document.getElementById('setupView').classList.add('hidden');
+  document.getElementById('matchView').classList.remove('hidden');
+  renderQB();
+  enterAskingPhase();
+}
+
+function endMatchEarly() {
+  if (roundInterval) clearInterval(roundInterval);
+  document.getElementById('matchView').classList.add('hidden');
+  document.getElementById('setupView').classList.remove('hidden');
 }
 
 function renderScoreboard() {
-  document.getElementById('roundBadge').textContent = `Round ${state.currentRound} / ${state.totalRounds}`;
-  document.getElementById('modeBadge').textContent = state.mode === 'umpire'
-    ? `Umpire: ${state.umpireName} (0 Pts Organizer)`
-    : 'Standard Mode';
-  const box = document.getElementById('scoreboardBox');
-  box.innerHTML = state.players.map(p => `
-    <div class="score-row">
-      <span><strong>${p.name}</strong> <span style="font-size:11px;color:var(--muted);">(${p.totalTime.toFixed(1)}s)</span></span>
-      <span class="badge" style="color:var(--green);">${p.score} pts</span>
-    </div>
-  `).join('');
+  document.getElementById('modeBadge').textContent = state.mode === 'umpire' ? 'UMPIRE MODE' : 'STANDARD MODE';
+  document.getElementById('roundBadge').textContent = 'Round ' + state.currentRound + '/' + state.totalRounds;
+  const sb = document.getElementById('scoreboardArea');
+  sb.innerHTML = '';
+  state.players.forEach(p => {
+    const badge = p.isUmpire
+      ? '<span class="badge" style="color:var(--gold);">🎙 Umpire (Organizer — 0 pts)</span>'
+      : '<span style="font-weight:900;color:var(--green);">' + p.score + ' pts</span> <span style="font-size:11px;color:var(--muted);">(' + p.totalTime.toFixed(1) + 's)</span>';
+    sb.innerHTML += '<div class="player-item"><div><b>' + escapeHtml(p.name) + '</b></div><div>' + badge + '</div></div>';
+  });
 }
 
-function prepareSetterPhase() {
+function hideAllPhases() {
+  ['askingPhase', 'answeringPhase', 'reviewPhase', 'gameoverPhase'].forEach(id => {
+    document.getElementById(id).classList.add('hidden');
+  });
+}
+
+function enterAskingPhase() {
+  hideAllPhases();
   renderScoreboard();
-  renderQbList();
-  document.getElementById('setterPhase').classList.remove('hidden');
-  document.getElementById('guessPhase').classList.add('hidden');
-  document.getElementById('resultPhase').classList.add('hidden');
-  document.getElementById('qInput').value = '';
-  document.getElementById('aInput').value = '';
-  document.getElementById('aiStatus').textContent = '';
+  document.getElementById('askingPhase').classList.remove('hidden');
+  document.getElementById('liveQuestionInput').value = '';
+  document.getElementById('liveAnswerInput').value = '';
+  document.getElementById('liveAiStatus').textContent = '';
 
-  if (state.mode === 'standard') {
-    const setter = state.players[state.setterIdx].name;
-    const guesser = state.players[state.guesserIdx].name;
-    document.getElementById('setterTitle').textContent = `${setter} (Setter): Enter Question`;
-    document.getElementById('setterSub').textContent = `Hide screen from ${guesser}!`;
+  if (state.mode === 'umpire') {
+    const ump = state.players[0];
+    document.getElementById('askerHeader').textContent = '🎙 ' + ump.name + ' (Umpire): Set Question for All Players';
   } else {
-    document.getElementById('setterTitle').textContent = `Umpire ${state.umpireName}: Ask All ${state.players.length} Player(s) at Once`;
-    document.getElementById('setterSub').textContent = `Everyone answers simultaneously. Umpire earns 0 pts.`;
+    const setter = state.players[state.setterIdx % state.players.length];
+    document.getElementById('askerHeader').textContent = '✍️ ' + setter.name + ' (Setter): Enter Question & Secret Answer';
   }
 }
 
-function lockQuestion() {
-  const q = document.getElementById('qInput').value.trim();
-  const a = document.getElementById('aInput').value.trim();
-  if (!q || !a) { alert('Please enter both a question and a secret answer.'); return; }
-  state.currentQ = q;
-  state.currentA = a;
+function lockQuestionAndStartTimer() {
+  const q = document.getElementById('liveQuestionInput').value.trim();
+  const a = document.getElementById('liveAnswerInput').value.trim();
+  if (!q || !a) { alert('Enter both a question and a secret answer!'); return; }
 
-  document.getElementById('setterPhase').classList.add('hidden');
-  document.getElementById('guessPhase').classList.remove('hidden');
-  document.getElementById('displayQuestion').textContent = q;
-  document.getElementById('displayHint').textContent = `Hint: ${buildSmartHint(a)}`;
+  state.question = q;
+  state.answer = a;
+  state.hint = buildSmartHint(a);
+  state.submissions = [];
+  state.lastAwardedIdx = -1;
 
-  state.timeLeft = state.roundSeconds;
-  state.questionStartTs = Date.now();
-  document.getElementById('timerDisplay').textContent = `${state.timeLeft}s`;
-
-  if (state.mode === 'standard') {
-    document.getElementById('guesserHeader').textContent = `${state.players[state.guesserIdx].name}'s Turn to Guess!`;
-    document.getElementById('standardGuessBox').classList.remove('hidden');
-    document.getElementById('umpireGuessBox').classList.add('hidden');
-    document.getElementById('guessInput').value = '';
+  if (state.mode === 'umpire') {
+    state.guesserQueue = state.players.map((p, i) => ({ p, i })).filter(x => !x.p.isUmpire).map(x => x.i);
   } else {
-    document.getElementById('guesserHeader').textContent = `All ${state.players.length} Players — Race the Clock!`;
-    document.getElementById('standardGuessBox').classList.add('hidden');
-    document.getElementById('umpireGuessBox').classList.remove('hidden');
-    const container = document.getElementById('umpirePlayerInputs');
-    container.innerHTML = state.players.map((p, i) => `
-      <div class="row" style="margin-bottom:8px;">
-        <input type="text" id="umpGuess_${i}" placeholder="${p.name}'s answer..." style="flex:1;margin:0;" />
-        <button type="button" id="umpLockBtn_${i}" class="btn btn-sm" onclick="lockSingleUmpirePlayer(${i})">Lock In</button>
-      </div>
-    `).join('');
+    const setterIdx = state.setterIdx % state.players.length;
+    const nextIdx = (setterIdx + 1) % state.players.length;
+    state.guesserQueue = [nextIdx];
   }
+  state.currentGuesserPos = 0;
+  startTurnForCurrentGuesser();
+}
 
-  if (state.timerInt) clearInterval(state.timerInt);
-  state.timerInt = setInterval(() => {
-    state.timeLeft--;
-    document.getElementById('timerDisplay').textContent = `${state.timeLeft}s`;
-    if (state.timeLeft <= 5 && state.timeLeft > 0) playBeep(700, 0.08);
-    if (state.timeLeft <= 0) {
-      clearInterval(state.timerInt);
-      playBeep(240, 0.3);
-      if (state.mode === 'standard') submitStandardGuess(true);
-      else finishUmpireRound();
+function startTurnForCurrentGuesser() {
+  if (state.currentGuesserPos >= state.guesserQueue.length) {
+    enterReviewPhase();
+    return;
+  }
+  hideAllPhases();
+  renderScoreboard();
+  document.getElementById('answeringPhase').classList.remove('hidden');
+
+  const gIdx = state.guesserQueue[state.currentGuesserPos];
+  const guesser = state.players[gIdx];
+  document.getElementById('activeGuesserBanner').textContent = '🎯 Answering Now: ' + guesser.name;
+  document.getElementById('activeQuestionText').textContent = '❓ ' + state.question;
+  document.getElementById('activeHintText').textContent = '💡 Hint: ' + state.hint;
+  document.getElementById('playerGuessInput').value = '';
+
+  if (roundInterval) clearInterval(roundInterval);
+  turnStartMs = Date.now();
+  let rem = state.timerSec;
+  document.getElementById('countdownDisplay').textContent = '⏱ ' + rem + 's';
+
+  roundInterval = setInterval(() => {
+    rem--;
+    document.getElementById('countdownDisplay').textContent = '⏱ ' + Math.max(0, rem) + 's';
+    if (rem <= 0) {
+      clearInterval(roundInterval);
+      recordSubmission(gIdx, '(Time Expired)', state.timerSec);
     }
   }, 1000);
 }
 
-let umpireLockedTimes = {};
-function lockSingleUmpirePlayer(idx) {
-  if (umpireLockedTimes[idx] !== undefined) return;
-  const elapsed = Math.min(state.roundSeconds, (Date.now() - state.questionStartTs) / 1000);
-  umpireLockedTimes[idx] = elapsed;
-  const inp = document.getElementById(`umpGuess_${idx}`);
-  const btn = document.getElementById(`umpLockBtn_${idx}`);
-  if (inp) inp.disabled = true;
-  if (btn) { btn.textContent = `Locked (${elapsed.toFixed(1)}s)`; btn.classList.add('btn-green'); }
-  playBeep(620, 0.08);
+function submitPassPlayGuess() {
+  if (roundInterval) clearInterval(roundInterval);
+  const gIdx = state.guesserQueue[state.currentGuesserPos];
+  const guess = document.getElementById('playerGuessInput').value.trim();
+  const elapsed = Math.max(0.1, Math.round(((Date.now() - turnStartMs) / 1000) * 10) / 10);
+  recordSubmission(gIdx, guess, elapsed);
 }
 
-function normalizeAns(s) {
-  return (s || '').trim().toLowerCase().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ');
+function skipCurrentGuesser() {
+  if (roundInterval) clearInterval(roundInterval);
+  const gIdx = state.guesserQueue[state.currentGuesserPos];
+  recordSubmission(gIdx, '(Skipped)', state.timerSec);
 }
 
-function submitStandardGuess(timedOut = false) {
-  if (state.timerInt) clearInterval(state.timerInt);
-  const elapsed = timedOut ? state.roundSeconds : Math.min(state.roundSeconds, (Date.now() - state.questionStartTs) / 1000);
-  const guess = timedOut ? '' : document.getElementById('guessInput').value.trim();
-  const isRight = !timedOut && normalizeAns(guess) === normalizeAns(state.currentA);
+function recordSubmission(gIdx, guess, elapsed) {
+  const guesser = state.players[gIdx];
+  const isCorrect = Boolean(guess) && !guess.startsWith('(') && (normalizeAnswer(guess) === normalizeAnswer(state.answer));
 
-  const setter = state.players[state.setterIdx];
-  const guesser = state.players[state.guesserIdx];
-
-  document.getElementById('guessPhase').classList.add('hidden');
-  document.getElementById('resultPhase').classList.remove('hidden');
-  document.getElementById('contestControls').classList.remove('hidden');
-  document.getElementById('setterDecisionBox').classList.add('hidden');
-
-  if (isRight) {
-    guesser.score += 5;
-    guesser.totalTime += elapsed;
-    state.lastAwardedTo = 'guesser';
-    playBeep(880, 0.2);
-    document.getElementById('resultHeadline').textContent = `✅ ${guesser.name} Got It (+5 Pts)!`;
-    document.getElementById('resultDetails').innerHTML = `
-      <strong>Guess:</strong> ${guess || '(No answer)'}<br>
-      <strong>Secret Answer:</strong> ${state.currentA}<br>
-      <strong>Time Taken:</strong> ${elapsed.toFixed(1)}s<br>
-      <strong>+5 Points</strong> awarded immediately to <strong>${guesser.name}</strong>!
-    `;
-    document.getElementById('contestBtn').classList.add('hidden');
-  } else {
-    setter.score += 5;
-    state.lastAwardedTo = 'setter';
-    playBeep(300, 0.25);
-    document.getElementById('resultHeadline').textContent = `❌ Missed! +5 Pts to ${setter.name}`;
-    document.getElementById('resultDetails').innerHTML = `
-      <strong>${guesser.name}'s Guess:</strong> ${guess || '(Timed out)'}<br>
-      <strong>Secret Answer:</strong> ${state.currentA}<br>
-      <strong>+5 Points</strong> awarded immediately to <strong>${setter.name}</strong>!
-    `;
-    document.getElementById('contestBtn').classList.remove('hidden');
-  }
-  renderScoreboard();
-}
-
-function triggerContest() {
-  document.getElementById('contestBtn').classList.add('hidden');
-  document.getElementById('setterDecisionBox').classList.remove('hidden');
-}
-
-function resolveContest(guesserWasRight) {
-  const setter = state.players[state.setterIdx];
-  const guesser = state.players[state.guesserIdx];
-  document.getElementById('setterDecisionBox').classList.add('hidden');
-
-  if (guesserWasRight && state.lastAwardedTo === 'setter') {
-    setter.score = Math.max(0, setter.score - 5);
-    guesser.score += 5;
-    state.lastAwardedTo = 'guesser';
-    document.getElementById('resultHeadline').textContent = `⚖️ Contest Accepted! +5 Pts to ${guesser.name}`;
-    document.getElementById('resultDetails').innerHTML += `<br><span style="color:var(--green);"><strong>Update:</strong> ${setter.name} accepted the contest. 5 points transferred to <strong>${guesser.name}</strong>!</span>`;
-  } else {
-    document.getElementById('resultHeadline').textContent = `⚖️ Contest Rejected — ${setter.name} Keeps +5 Pts`;
-    document.getElementById('resultDetails').innerHTML += `<br><span style="color:var(--red);"><strong>Update:</strong> ${setter.name} rejected the contest and keeps the 5 points.</span>`;
-  }
-  renderScoreboard();
-}
-
-function finishUmpireRound() {
-  if (state.timerInt) clearInterval(state.timerInt);
-  const fallbackElapsed = Math.min(state.roundSeconds, (Date.now() - state.questionStartTs) / 1000);
-  let winners = [];
-  let summaryLines = [];
-
-  state.players.forEach((p, idx) => {
-    const inp = document.getElementById(`umpGuess_${idx}`);
-    const guess = inp ? inp.value.trim() : '';
-    const t = umpireLockedTimes[idx] !== undefined ? umpireLockedTimes[idx] : fallbackElapsed;
-    const isRight = normalizeAns(guess) === normalizeAns(state.currentA);
-    if (isRight) {
-      p.score += 5;
-      p.totalTime += t;
-      winners.push(p.name);
-      summaryLines.push(`✅ <strong>${p.name}</strong>: "${guess}" — <strong>+5 pts</strong> (${t.toFixed(1)}s)`);
-    } else {
-      summaryLines.push(`❌ <strong>${p.name}</strong>: "${guess || 'No answer'}" — 0 pts`);
+  if (state.mode === 'umpire') {
+    if (isCorrect) {
+      guesser.score += 5;
+      guesser.totalTime = Math.round((guesser.totalTime + elapsed) * 10) / 10;
     }
+  } else {
+    const setterIdx = state.setterIdx % state.players.length;
+    if (isCorrect) {
+      guesser.score += 5;
+      guesser.totalTime = Math.round((guesser.totalTime + elapsed) * 10) / 10;
+      state.lastAwardedIdx = gIdx;
+    } else {
+      state.players[setterIdx].score += 5;
+      state.lastAwardedIdx = setterIdx;
+    }
+  }
+
+  state.submissions.push({
+    gIdx,
+    name: guesser.name,
+    guess,
+    correct: isCorrect,
+    time: elapsed
   });
 
-  umpireLockedTimes = {};
-  document.getElementById('guessPhase').classList.add('hidden');
-  document.getElementById('resultPhase').classList.remove('hidden');
-  document.getElementById('contestControls').classList.add('hidden');
-
-  if (winners.length > 0) {
-    playBeep(880, 0.2);
-    document.getElementById('resultHeadline').textContent = `🎉 ${winners.length} Player(s) Scored +5 Pts!`;
-  } else {
-    playBeep(300, 0.25);
-    document.getElementById('resultHeadline').textContent = `😶 Nobody Got It — 0 Points Awarded This Round`;
-  }
-
-  document.getElementById('resultDetails').innerHTML = `
-    <strong>Secret Answer:</strong> ${state.currentA}<br><br>
-    ${summaryLines.join('<br>')}
-    <br><br><span style="font-size:12px;color:var(--muted);">Umpire (${state.umpireName}) is the organizer and earns 0 points.</span>
-  `;
-  renderScoreboard();
+  state.currentGuesserPos++;
+  startTurnForCurrentGuesser();
 }
 
-function nextRound() {
+function enterReviewPhase() {
+  hideAllPhases();
+  renderScoreboard();
+  document.getElementById('reviewPhase').classList.remove('hidden');
+  document.getElementById('revealAnswerText').textContent = state.answer;
+
+  const listEl = document.getElementById('roundResultsList');
+  listEl.innerHTML = '';
+  state.submissions.forEach(s => {
+    const badge = s.correct
+      ? '<span style="color:var(--green);font-weight:800;">✅ +5 pts (' + s.time + 's)</span>'
+      : '<span style="color:var(--red);font-weight:800;">❌ 0 pts (' + s.time + 's)</span>';
+    listEl.innerHTML += '<div class="player-item"><div><b>' + escapeHtml(s.name) + ':</b> ' + escapeHtml(s.guess) + '</div><div>' + badge + '</div></div>';
+  });
+
+  const contestArea = document.getElementById('contestArea');
+  if (state.mode === 'standard') {
+    contestArea.classList.remove('hidden');
+    document.getElementById('contestBtn').classList.remove('hidden');
+    document.getElementById('setterApprovalBox').classList.add('hidden');
+  } else {
+    contestArea.classList.add('hidden');
+  }
+}
+
+function openContestPanel() {
+  document.getElementById('contestBtn').classList.add('hidden');
+  document.getElementById('setterApprovalBox').classList.remove('hidden');
+}
+
+function resolveContest(acceptGuesser) {
+  const setterIdx = state.setterIdx % state.players.length;
+  const sub = state.submissions[0];
+  if (sub) {
+    const gIdx = sub.gIdx;
+    if (acceptGuesser && state.lastAwardedIdx === setterIdx) {
+      state.players[setterIdx].score = Math.max(0, state.players[setterIdx].score - 5);
+      state.players[gIdx].score += 5;
+      state.lastAwardedIdx = gIdx;
+      sub.correct = true;
+    } else if (!acceptGuesser && state.lastAwardedIdx === gIdx) {
+      state.players[gIdx].score = Math.max(0, state.players[gIdx].score - 5);
+      state.players[setterIdx].score += 5;
+      state.lastAwardedIdx = setterIdx;
+      sub.correct = false;
+    }
+  }
+  document.getElementById('setterApprovalBox').classList.add('hidden');
+  enterReviewPhase();
+}
+
+function advanceRound() {
   if (state.currentRound >= state.totalRounds) {
-    showFinalResults();
+    hideAllPhases();
+    renderScoreboard();
+    document.getElementById('gameoverPhase').classList.remove('hidden');
+    const ranked = state.players.filter(p => !p.isUmpire).sort((a, b) => (b.score - a.score) || (a.totalTime - b.totalTime));
+    const pod = document.getElementById('finalPodium');
+    pod.innerHTML = '';
+    ranked.forEach((p, idx) => {
+      const medal = idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : '#' + (idx + 1);
+      pod.innerHTML += '<div class="player-item"><div><b>' + medal + ' ' + escapeHtml(p.name) + '</b></div><div><b style="color:var(--gold);">' + p.score + ' pts</b> (' + p.totalTime.toFixed(1) + 's)</div></div>';
+    });
     return;
   }
+
   state.currentRound++;
   if (state.mode === 'standard') {
-    state.setterIdx = (state.setterIdx + 1) % 2;
-    state.guesserIdx = (state.guesserIdx + 1) % 2;
+    state.setterIdx = (state.setterIdx + 1) % state.players.length;
   }
-  prepareSetterPhase();
+  enterAskingPhase();
 }
 
-function showFinalResults() {
-  document.getElementById('gameScreen').classList.add('hidden');
-  document.getElementById('finalScreen').classList.remove('hidden');
-  const ranked = [...state.players].sort((a, b) => (b.score - a.score) || (a.totalTime - b.totalTime));
-  document.getElementById('finalStandings').innerHTML = ranked.map((p, i) => `
-    <div class="score-row">
-      <span><strong>#${i + 1} ${p.name}</strong> <span style="font-size:12px;color:var(--muted);">(${p.totalTime.toFixed(1)}s total)</span></span>
-      <span class="badge" style="color:var(--accent2);">${p.score} pts</span>
-    </div>
-  `).join('');
-}
-
-function resetToLobby() {
-  document.getElementById('finalScreen').classList.add('hidden');
-  document.getElementById('setupScreen').classList.remove('hidden');
-  document.getElementById('creatorHub').classList.remove('hidden');
-}
+window.addEventListener('DOMContentLoaded', () => {
+  renderCreatorUrl();
+  renderQB();
+  startIntroSlideshow();
+});
 </script>
 </body>
 </html>

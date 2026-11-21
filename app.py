@@ -52,31 +52,25 @@ def build_hint(answer):
     return ', '.join(parts) if parts else f"{word_count} {'word' if word_count == 1 else 'words'}"
 
 
-def find_asset_file(filename):
-    if not filename or filename.endswith('.py'):
-        return None
-    base_name = os.path.basename(filename)
-    stem, ext = os.path.splitext(base_name)
-    alt_exts = [ext] if ext else []
-    if ext.lower() in ('.jpg', '.jpeg', '.png', '.webp'):
-        alt_exts = ['.jpg', '.jpeg', '.png', '.webp', '.JPG', '.JPEG', '.PNG']
+def find_asset_file(requested_name):
+    clean_req = os.path.basename(requested_name).lower()
+    stem, ext = os.path.splitext(clean_req)
+    img_exts = ('.jpg', '.jpeg', '.png', '.webp', '.gif')
+    aud_exts = ('.mp3', '.wav', '.ogg', '.m4a')
 
-    search_dirs = ['.', 'static', 'media', 'images', 'assets', 'public']
-    for folder in search_dirs:
-        if not os.path.isdir(folder):
-            continue
-        try:
-            entries = os.listdir(folder)
-        except Exception:
-            continue
-        lower_map = {e.lower(): e for e in entries}
-        if base_name.lower() in lower_map:
-            return folder, lower_map[base_name.lower()]
-        for e_ext in alt_exts:
-            cand = (stem + e_ext).lower()
-            if cand in lower_map:
-                return folder, lower_map[cand]
-    return None
+    for root, dirs, files in os.walk('.'):
+        dirs[:] = [d for d in dirs if not d.startswith('.') and d not in ('__pycache__', 'venv', '.venv')]
+        for f in files:
+            fl = f.lower()
+            f_stem, f_ext = os.path.splitext(fl)
+            if fl == clean_req:
+                return root, f
+            if f_stem == stem:
+                if ext in img_exts and f_ext in img_exts:
+                    return root, f
+                if ext in aud_exts and f_ext in aud_exts:
+                    return root, f
+    return None, None
 
 
 @app.route('/')
@@ -84,21 +78,32 @@ def index():
     return render_template_string(HTML_TEMPLATE)
 
 
+@app.route('/api/media-debug')
+def media_debug():
+    found = {}
+    for target in ['double_sage_icon.jpg', 'double_sage_battle.jpg', 'double_sage_banner.jpg', 'double_sage_tournament.jpg', 'theme.mp3']:
+        folder, fname = find_asset_file(target)
+        found[target] = os.path.join(folder, fname) if folder else None
+    return jsonify({'detected_assets': found})
+
+
 @app.route('/<path:filename>')
 def serve_files(filename):
     if filename.endswith('.py'):
         return jsonify({'error': 'Forbidden'}), 403
-    found = find_asset_file(filename)
-    if found:
-        return send_from_directory(found[0], found[1])
+    if os.path.exists(os.path.join('.', filename)) and os.path.isfile(os.path.join('.', filename)):
+        return send_from_directory('.', filename)
+    folder, real_name = find_asset_file(filename)
+    if folder and real_name:
+        return send_from_directory(folder, real_name)
     return jsonify({'error': 'Not found'}), 404
 
 
 @app.route('/media/<path:filename>')
 def serve_media(filename):
-    found = find_asset_file(filename)
-    if found:
-        return send_from_directory(found[0], found[1])
+    folder, real_name = find_asset_file(filename)
+    if folder and real_name:
+        return send_from_directory(folder, real_name)
     return jsonify({'error': 'Media not found'}), 404
 
 
@@ -330,7 +335,7 @@ def next_round():
     return jsonify({'ok': True, 'room': room})
 
 
-HTML_TEMPLATE = """<!DOCTYPE html>
+HTML_TEMPLATE = r"""<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -359,9 +364,9 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   .controls { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
   .pill {
     background: #1e293b; color: #e2e8f0; border: 1px solid #334155;
-    padding: 6px 11px; border-radius: 999px; font-size: 12px; cursor: pointer; font-weight: 700;
+    padding: 5px 10px; border-radius: 999px; font-size: 12px; cursor: pointer; font-weight: 600;
   }
-  .pill:active { transform: scale(0.96); }
+  .pill:active { transform: scale(0.97); }
   .container { max-width: 640px; margin: 14px auto; padding: 0 12px; }
   .card {
     background: var(--card); border: 1px solid #1e293b; border-radius: 16px;
@@ -383,7 +388,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   .btn-green { background: var(--green); color: #041f0e; }
   .btn-red { background: var(--red); color: #fff; }
   .btn-dark { background: #1e293b; color: #e2e8f0; border: 1px solid #334155; }
-  .btn-sm { width: auto; padding: 8px 12px; font-size: 12px; margin-top: 0; border-radius: 8px; }
+  .btn-sm { width: auto; padding: 7px 12px; font-size: 12px; margin-top: 0; border-radius: 8px; }
   .row { display: flex; gap: 8px; align-items: center; }
   .row > * { flex: 1; }
   .badge {
@@ -404,32 +409,30 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   }
   .hidden { display: none !important; }
   #introOverlay {
-    position: fixed; top: 0; left: 0; right: 0; bottom: 0;
-    background: radial-gradient(circle at center, #0f172a 0%, #050811 100%);
-    z-index: 99999; display: flex; flex-direction: column; align-items: center; justify-content: center;
-    padding: 20px; text-align: center; cursor: pointer;
+    position: fixed; inset: 0; background: #050811; z-index: 99999;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    padding: 20px; text-align: center; touch-action: manipulation;
   }
   #introSlideImg {
-    max-width: 90%; max-height: 56vh; border-radius: 18px; pointer-events: none;
-    box-shadow: 0 12px 40px rgba(56,189,248,0.4); object-fit: contain;
+    max-width: 92%; max-height: 58vh; border-radius: 18px;
+    box-shadow: 0 12px 40px rgba(56,189,248,0.35); object-fit: contain;
+    pointer-events: none;
   }
   #introFallbackCrest {
-    width: 140px; height: 140px; border-radius: 28px; pointer-events: none;
-    background: linear-gradient(135deg, #0284c7, #facc15); color: #050811;
-    display: flex; align-items: center; justify-content: center; font-size: 56px; font-weight: 900;
-    box-shadow: 0 12px 35px rgba(250,204,21,0.35);
+    width: 140px; height: 140px; border-radius: 50%;
+    background: radial-gradient(circle, #38bdf8 0%, #0f172a 75%);
+    border: 3px solid var(--gold); display: flex; align-items: center; justify-content: center;
+    font-size: 56px; box-shadow: 0 0 35px rgba(250,204,21,0.45); pointer-events: none;
   }
-  #introTitle { margin-top: 16px; font-size: 22px; font-weight: 900; color: var(--gold); pointer-events: none; }
-  #introSub { color: #94a3b8; font-size: 13px; margin-top: 6px; pointer-events: none; }
+  #introTitle { margin-top: 14px; font-size: 22px; font-weight: 900; color: var(--gold); pointer-events: none; }
   #skipIntroBtn {
-    position: fixed; top: 18px; right: 18px; z-index: 2147483647;
+    position: fixed; top: 16px; right: 16px; z-index: 2147483647;
     pointer-events: auto; cursor: pointer; background: var(--gold); color: #000;
-    border: 2px solid #fff; padding: 11px 20px; border-radius: 999px; font-weight: 900; font-size: 14px;
-    box-shadow: 0 4px 18px rgba(0,0,0,0.75);
+    border: none; padding: 12px 20px; border-radius: 999px; font-weight: 900; font-size: 15px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.6); touch-action: manipulation;
   }
   .modal-bg {
-    position: fixed; top: 0; left: 0; right: 0; bottom: 0;
-    background: rgba(0,0,0,0.82); z-index: 10000;
+    position: fixed; inset: 0; background: rgba(0,0,0,0.82); z-index: 10000;
     display: flex; align-items: center; justify-content: center; padding: 16px;
   }
   .modal-box {
@@ -441,11 +444,11 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 <body>
 
 <div id="introOverlay" onclick="dismissIntroNow(event)">
-  <button id="skipIntroBtn" type="button" onclick="dismissIntroNow(event)">Skip Intro ⏭</button>
-  <img id="introSlideImg" src="/double_sage_icon.jpg" alt="Double Sage" onerror="this.classList.add('hidden');document.getElementById('introFallbackCrest').classList.remove('hidden');">
+  <button id="skipIntroBtn" type="button" onclick="dismissIntroNow(event)" ontouchend="dismissIntroNow(event)">Skip Intro ⏭</button>
+  <img id="introSlideImg" src="/double_sage_icon.jpg" alt="Double Sage" onerror="this.style.display='none';document.getElementById('introFallbackCrest').classList.remove('hidden');">
   <div id="introFallbackCrest" class="hidden">⚔️</div>
   <div id="introTitle">DOUBLE SAGE — BATTLE OF MINDS</div>
-  <div id="introSub">Tap anywhere or press Skip Intro to enter immediately</div>
+  <div style="color:#94a3b8;font-size:13px;margin-top:6px;pointer-events:none;">Tap anywhere or press Skip Intro to enter</div>
 </div>
 
 <audio id="bgMusic" src="/theme.mp3" loop preload="auto"></audio>
@@ -466,7 +469,6 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 </header>
 
 <div class="container">
-
   <div id="homeView">
     <div class="card">
       <h2>🎮 Create Online Room</h2>
@@ -654,28 +656,9 @@ const INTRO_SLIDES = [
   { img: '/double_sage_tournament.jpg', title: 'CLIMB THE LEADERBOARD TO VICTORY' }
 ];
 let slideIdx = 0;
-let slideInterval = null;
-
-function dismissIntroNow(e) {
-  if (e && e.stopPropagation) e.stopPropagation();
-  if (slideInterval) {
-    clearInterval(slideInterval);
-    slideInterval = null;
-  }
+let slideInterval = setInterval(function() {
   const ov = document.getElementById('introOverlay');
-  if (ov) {
-    ov.style.display = 'none';
-    ov.remove();
-  }
-  try { startThemeAudio(); } catch (err) {}
-}
-
-slideInterval = setInterval(() => {
-  const ov = document.getElementById('introOverlay');
-  if (!ov) {
-    clearInterval(slideInterval);
-    return;
-  }
+  if (!ov) { clearInterval(slideInterval); return; }
   slideIdx++;
   if (slideIdx >= INTRO_SLIDES.length) {
     dismissIntroNow();
@@ -686,11 +669,22 @@ slideInterval = setInterval(() => {
   const titleEl = document.getElementById('introTitle');
   if (imgEl) {
     if (crestEl) crestEl.classList.add('hidden');
-    imgEl.classList.remove('hidden');
+    imgEl.style.display = 'inline-block';
     imgEl.src = INTRO_SLIDES[slideIdx].img;
   }
   if (titleEl) titleEl.textContent = INTRO_SLIDES[slideIdx].title;
 }, 3000);
+
+function dismissIntroNow(e) {
+  if (e && e.preventDefault) e.preventDefault();
+  if (slideInterval) { clearInterval(slideInterval); slideInterval = null; }
+  const ov = document.getElementById('introOverlay');
+  if (ov) {
+    ov.style.display = 'none';
+    ov.remove();
+  }
+  try { startThemeAudio(); } catch (err) {}
+}
 
 let musicEnabled = true;
 let audioCtx = null;
@@ -701,7 +695,7 @@ function startThemeAudio() {
   const bg = document.getElementById('bgMusic');
   if (bg) {
     bg.volume = parseFloat(document.getElementById('volSlider').value || 0.8);
-    bg.play().catch(() => startSynthFallback());
+    bg.play().catch(function() { startSynthFallback(); });
   }
 }
 
@@ -711,7 +705,7 @@ function startSynthFallback() {
     audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
     const notes = [261.63, 329.63, 392.00, 523.25, 392.00, 329.63];
     let step = 0;
-    synthTimer = setInterval(() => {
+    synthTimer = setInterval(function() {
       if (!musicEnabled) return;
       const osc = audioCtx.createOscillator();
       const gain = audioCtx.createGain();
@@ -751,7 +745,7 @@ function handleSongUpload(inp) {
   const bg = document.getElementById('bgMusic');
   bg.src = URL.createObjectURL(inp.files[0]);
   bg.loop = true;
-  if (musicEnabled) bg.play().catch(() => {});
+  if (musicEnabled) bg.play().catch(function() {});
   document.getElementById('resetThemeBtn').classList.remove('hidden');
 }
 
@@ -763,7 +757,7 @@ function resetDefaultTheme() {
   bg.src = '/theme.mp3';
   bg.loop = true;
   bg.load();
-  if (musicEnabled) bg.play().catch(() => startSynthFallback());
+  if (musicEnabled) bg.play().catch(function() { startSynthFallback(); });
   document.getElementById('resetThemeBtn').classList.add('hidden');
 }
 
@@ -791,7 +785,7 @@ async function suggestAnswer(qId, aId, statusId) {
   if (!qRaw) { statusEl.textContent = 'Type a question first.'; return; }
 
   const lower = qRaw.toLowerCase();
-  if (/\b(my|me|i|mine|our|we|us|nickname|favorite|favourite|birthday|girlfriend|boyfriend|crush)\b/i.test(lower)) {
+  if (/(my|me|i|mine|our|we|us|nickname|favorite|favourite|birthday|girlfriend|boyfriend|crush)/i.test(lower)) {
     statusEl.textContent = '🔒 Personal question detected — enter your own secret answer!';
     return;
   }
@@ -891,7 +885,7 @@ function redeemPack() {
   const upper = raw.toUpperCase();
   const list = getQB();
   if (PRO_PACKS[upper]) {
-    PRO_PACKS[upper].forEach(item => list.push(item));
+    PRO_PACKS[upper].forEach(function(item) { list.push(item); });
     saveQB(list);
     alert('Unlocked ' + PRO_PACKS[upper].length + ' questions from ' + upper + '!');
     document.getElementById('packCodeInput').value = '';
@@ -901,7 +895,7 @@ function redeemPack() {
     try {
       const decoded = JSON.parse(atob(raw.slice(7)));
       if (Array.isArray(decoded)) {
-        decoded.forEach(item => { if (item.q && item.a) list.push({ q: item.q, a: item.a }); });
+        decoded.forEach(function(item) { if (item.q && item.a) list.push({ q: item.q, a: item.a }); });
         saveQB(list);
         alert('Imported ' + decoded.length + ' custom pack questions!');
         document.getElementById('packCodeInput').value = '';
@@ -926,7 +920,7 @@ function renderQB() {
   const sel = document.getElementById('qbQuickSelect');
   sel.innerHTML = '<option value="">-- Load from My QBs (' + list.length + ') --</option>';
   container.innerHTML = '';
-  list.forEach((item, i) => {
+  list.forEach(function(item, i) {
     const opt = document.createElement('option');
     opt.value = i;
     opt.textContent = item.q;
@@ -970,7 +964,7 @@ function openHowToPlay() {
 
 function escapeHtml(str) {
   return String(str || '').replace(/[&<>"']/g, function(m) {
-    return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[m];
+    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m];
   });
 }
 
@@ -992,7 +986,7 @@ async function createRoom() {
   const mode = document.getElementById('gameModeSelect').value;
   const rounds = parseInt(document.getElementById('roundsInput').value || 5, 10);
   const timer = parseInt(document.getElementById('timerInput').value || 30, 10);
-  const res = await apiPost('/api/create', { name, mode, rounds, timer });
+  const res = await apiPost('/api/create', { name: name, mode: mode, rounds: rounds, timer: timer });
   if (res.ok) enterRoom(res.room, res.player_id);
   else alert(res.error || 'Failed to create room');
 }
@@ -1001,7 +995,7 @@ async function joinRoom() {
   const name = document.getElementById('joinNameInput').value.trim() || 'Player';
   const code = document.getElementById('joinCodeInput').value.trim().toUpperCase();
   if (!code) { alert('Enter a 4-letter room code'); return; }
-  const res = await apiPost('/api/join', { name, code });
+  const res = await apiPost('/api/join', { name: name, code: code });
   if (res.ok) enterRoom(res.room, res.player_id);
   else alert(res.error || 'Could not join room');
 }
@@ -1014,7 +1008,7 @@ function enterRoom(room, pid) {
   renderQB();
   renderRoom(room);
   if (pollTimer) clearInterval(pollTimer);
-  pollTimer = setInterval(async () => {
+  pollTimer = setInterval(async function() {
     try {
       const r = await fetch('/api/state/' + currentCode);
       const data = await r.json();
@@ -1043,7 +1037,7 @@ async function sendQuestion() {
   const question = document.getElementById('liveQuestionInput').value.trim();
   const answer = document.getElementById('liveAnswerInput').value.trim();
   if (!question || !answer) { alert('Enter both a question and answer'); return; }
-  const res = await apiPost('/api/ask', { code: currentCode, question, answer });
+  const res = await apiPost('/api/ask', { code: currentCode, question: question, answer: answer });
   if (res.ok) {
     document.getElementById('liveQuestionInput').value = '';
     document.getElementById('liveAnswerInput').value = '';
@@ -1053,7 +1047,7 @@ async function sendQuestion() {
 
 async function submitGuess() {
   const guess = document.getElementById('playerGuessInput').value.trim();
-  const res = await apiPost('/api/guess', { code: currentCode, player_id: myPlayerId, guess });
+  const res = await apiPost('/api/guess', { code: currentCode, player_id: myPlayerId, guess: guess });
   if (res.ok) {
     document.getElementById('playerGuessInput').value = '';
     renderRoom(res.room);
@@ -1076,7 +1070,7 @@ async function nextRound() {
 }
 
 function renderRoom(room) {
-  const me = room.players.find(p => p.id === myPlayerId);
+  const me = room.players.find(function(p) { return p.id === myPlayerId; });
   if (!me) {
     alert('You were removed from the room.');
     location.href = '/';
@@ -1089,17 +1083,17 @@ function renderRoom(room) {
 
   const sb = document.getElementById('scoreboardArea');
   sb.innerHTML = '';
-  room.players.forEach(p => {
+  room.players.forEach(function(p) {
     const div = document.createElement('div');
     div.className = 'player-item';
     const roleTag = p.is_umpire ? '<span class="badge" style="color:var(--gold);">🎙 Umpire (Organizer)</span>' :
       '<span style="font-weight:900;color:var(--green);">' + p.score + ' pts</span> <span style="font-size:11px;color:var(--muted);">(' + p.total_time + 's)</span>';
-    const kickBtn = (isHost && p.id !== myPlayerId) ? ' <button class="pill" type="button" onclick="kickPlayer(\'' + p.id + '\')">Kick</button>' : '';
+    const kickBtn = (isHost && p.id !== myPlayerId) ? ' <button class="pill" type="button" onclick="kickPlayer('' + p.id + '')">Kick</button>' : '';
     div.innerHTML = '<div><b>' + escapeHtml(p.name) + '</b>' + (p.id === myPlayerId ? ' (You)' : '') + '</div><div>' + roleTag + kickBtn + '</div>';
     sb.appendChild(div);
   });
 
-  ['lobbyPhase', 'askingPhase', 'answeringPhase', 'reviewPhase', 'gameoverPhase'].forEach(id => {
+  ['lobbyPhase', 'askingPhase', 'answeringPhase', 'reviewPhase', 'gameoverPhase'].forEach(function(id) {
     document.getElementById(id).classList.add('hidden');
   });
 
@@ -1148,7 +1142,7 @@ function renderRoom(room) {
     if (!subs.length) {
       subList.innerHTML = '<p style="color:var(--muted);">No answers submitted before time expired (0 pts awarded).</p>';
     } else {
-      subs.forEach(s => {
+      subs.forEach(function(s) {
         const badge = s.correct
           ? '<span style="color:var(--green);font-weight:800;">✅ +5 pts (' + s.time + 's)</span>'
           : '<span style="color:var(--red);font-weight:800;">❌ 0 pts (' + s.time + 's)</span>';
@@ -1170,17 +1164,19 @@ function renderRoom(room) {
     document.getElementById('nextRoundBtn').classList.toggle('hidden', !isHost || room.contest_pending);
   } else if (room.phase === 'gameover') {
     document.getElementById('gameoverPhase').classList.remove('hidden');
-    const ranked = room.players.filter(p => !p.is_umpire).sort((a, b) => (b.score - a.score) || (a.total_time - b.total_time));
+    const ranked = room.players.filter(function(p) { return !p.is_umpire; }).sort(function(a, b) {
+      return (b.score - a.score) || (a.total_time - b.total_time);
+    });
     const pod = document.getElementById('finalPodium');
     pod.innerHTML = '';
-    ranked.forEach((p, idx) => {
+    ranked.forEach(function(p, idx) {
       const medal = idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : '#' + (idx + 1);
       pod.innerHTML += '<div class="player-item"><div><b>' + medal + ' ' + escapeHtml(p.name) + '</b></div><div><b style="color:var(--gold);">' + p.score + ' pts</b> (' + p.total_time + 's)</div></div>';
     });
   }
 }
 
-window.addEventListener('DOMContentLoaded', () => {
+window.addEventListener('DOMContentLoaded', function() {
   renderCreatorUrl();
   const params = new URLSearchParams(location.search);
   const code = params.get('room');
