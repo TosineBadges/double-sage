@@ -656,35 +656,21 @@ const INTRO_SLIDES = [
   { img: '/double_sage_tournament.jpg', title: 'CLIMB THE LEADERBOARD TO VICTORY' }
 ];
 let slideIdx = 0;
-let slideInterval = setInterval(function() {
+const slideInterval = setInterval(function() {
   const ov = document.getElementById('introOverlay');
-  if (!ov) { clearInterval(slideInterval); return; }
+  if (!ov || ov.style.display === 'none') { clearInterval(slideInterval); return; }
   slideIdx++;
   if (slideIdx >= INTRO_SLIDES.length) {
-    dismissIntroNow();
+    ov.style.display = 'none';
+    clearInterval(slideInterval);
+    startThemeAudio();
     return;
   }
   const imgEl = document.getElementById('introSlideImg');
-  const crestEl = document.getElementById('introFallbackCrest');
   const titleEl = document.getElementById('introTitle');
-  if (imgEl) {
-    if (crestEl) crestEl.classList.add('hidden');
-    imgEl.style.display = 'inline-block';
-    imgEl.src = INTRO_SLIDES[slideIdx].img;
-  }
+  if (imgEl) { imgEl.style.display = 'inline-block'; imgEl.src = INTRO_SLIDES[slideIdx].img; }
   if (titleEl) titleEl.textContent = INTRO_SLIDES[slideIdx].title;
 }, 3000);
-
-function dismissIntroNow(e) {
-  if (e && e.preventDefault) e.preventDefault();
-  if (slideInterval) { clearInterval(slideInterval); slideInterval = null; }
-  const ov = document.getElementById('introOverlay');
-  if (ov) {
-    ov.style.display = 'none';
-    ov.remove();
-  }
-  try { startThemeAudio(); } catch (err) {}
-}
 
 let musicEnabled = true;
 let audioCtx = null;
@@ -702,7 +688,8 @@ function startThemeAudio() {
 function startSynthFallback() {
   if (synthTimer || !musicEnabled) return;
   try {
-    audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+    audioCtx = audioCtx || new AudioContextClass();
     const notes = [261.63, 329.63, 392.00, 523.25, 392.00, 329.63];
     let step = 0;
     synthTimer = setInterval(function() {
@@ -785,15 +772,18 @@ async function suggestAnswer(qId, aId, statusId) {
   if (!qRaw) { statusEl.textContent = 'Type a question first.'; return; }
 
   const lower = qRaw.toLowerCase();
-  if (/(my|me|i|mine|our|we|us|nickname|favorite|favourite|birthday|girlfriend|boyfriend|crush)/i.test(lower)) {
-    statusEl.textContent = '🔒 Personal question detected — enter your own secret answer!';
-    return;
+  const personalWords = ['my ', ' me', 'i ', 'mine', 'our ', 'we ', 'nickname', 'favorite', 'favourite', 'birthday', 'crush'];
+  for (let i = 0; i < personalWords.length; i++) {
+    if (lower.indexOf(personalWords[i]) !== -1) {
+      statusEl.textContent = '🔒 Personal question detected — enter your own secret answer!';
+      return;
+    }
   }
 
-  const cleanedMath = lower.replace(/what is|calculate|solve|=|\?/g, '').replace(/x/g, '*').replace(/÷/g, '/').trim();
-  if (/^[0-9+\-*/().\s]+$/.test(cleanedMath) && /[0-9]/.test(cleanedMath)) {
+  const cleaned = lower.replace('what is', '').replace('calculate', '').replace('solve', '').replace('?', '').replace('=', '').replace(/x/g, '*').trim();
+  if (/^[0-9+\-*/().\s]+$/.test(cleaned) && /[0-9]/.test(cleaned)) {
     try {
-      const val = Function('"use strict";return (' + cleanedMath + ')')();
+      const val = Function('return (' + cleaned + ')')();
       if (typeof val === 'number' && isFinite(val)) {
         ansEl.value = String(Number.isInteger(val) ? val : Math.round(val * 100) / 100);
         statusEl.textContent = '✅ Solved math expression!';
@@ -802,9 +792,9 @@ async function suggestAnswer(qId, aId, statusId) {
     } catch (e) {}
   }
 
-  for (const [k, v] of Object.entries(FACT_BANK)) {
-    if (lower.includes(k)) {
-      ansEl.value = v;
+  for (const k in FACT_BANK) {
+    if (lower.indexOf(k) !== -1) {
+      ansEl.value = FACT_BANK[k];
       statusEl.textContent = '✅ Suggested factual answer!';
       return;
     }
@@ -812,19 +802,19 @@ async function suggestAnswer(qId, aId, statusId) {
 
   statusEl.textContent = '🔍 Searching factual answer...';
   try {
-    const query = qRaw.replace(/^(who is|what is|where is|when was|who was|the)\s+/i, '').replace(/\?/g, '').trim();
-    const res = await fetch('https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=' + encodeURIComponent(query) + '&format=json&origin=*');
+    const query = qRaw.replace(/who is|what is|where is|when was|who was|\?/gi, '').trim();
+    const res = await fetch('https://wikipedia.org' + encodeURIComponent(query) + '&format=json&origin=*');
     const data = await res.json();
     const hits = (data.query && data.query.search) || [];
     if (hits.length > 0) {
       let best = hits[0].title;
-      if (best.toLowerCase().includes(query.toLowerCase()) && hits.length > 1) {
+      if (best.toLowerCase().indexOf(query.toLowerCase()) !== -1 && hits.length > 1) {
         best = hits[1].title;
       }
-      ansEl.value = best.replace(/\s*\(.*?\)\s*/g, '').trim();
+      ansEl.value = best.replace(/\(.*?\)/g, '').trim();
       statusEl.textContent = '✅ Suggested from knowledge base!';
     } else {
-      statusEl.textContent = 'No exact match found — type your answer manually.';
+      statusEl.textContent = 'No exact match — type your answer manually.';
     }
   } catch (e) {
     statusEl.textContent = 'Offline — type your answer manually.';
@@ -835,21 +825,18 @@ const PRO_PACKS = {
   'NAIJA2026': [
     { q: 'Who is the president of Nigeria?', a: 'Bola Ahmed Tinubu' },
     { q: 'What is the capital city of Nigeria?', a: 'Abuja' },
-    { q: 'Which Nigerian artist won Best African Music Performance at the 2024 Grammys?', a: 'Tyla' },
     { q: 'What year did Nigeria gain independence?', a: '1960' },
     { q: 'What is the largest city by population in Nigeria?', a: 'Lagos' }
   ],
   'FOOTYPRO': [
     { q: 'Which country won the 2022 FIFA World Cup?', a: 'Argentina' },
-    { q: 'Who has won the most Ballon dOr awards?', a: 'Lionel Messi' },
     { q: 'Which club has won the most UEFA Champions League titles?', a: 'Real Madrid' },
     { q: 'How many players are on the pitch for one football team?', a: '11' }
   ],
   'PARTYVIP': [
     { q: 'What is 25 * 4?', a: '100' },
     { q: 'How many days are in a leap year?', a: '366' },
-    { q: 'Which planet is known as the Red Planet?', a: 'Mars' },
-    { q: 'What gas do plants absorb from the atmosphere?', a: 'Carbon Dioxide' }
+    { q: 'Which planet is known as the Red Planet?', a: 'Mars' }
   ]
 };
 
@@ -869,7 +856,7 @@ function addQBItem() {
   const a = document.getElementById('qbAInput').value.trim();
   if (!q || !a) return;
   const list = getQB();
-  list.push({ q, a });
+  list.push({ q: q, a: a });
   saveQB(list);
   document.getElementById('qbQInput').value = '';
   document.getElementById('qbAInput').value = '';
@@ -891,7 +878,7 @@ function redeemPack() {
     document.getElementById('packCodeInput').value = '';
     return;
   }
-  if (raw.startsWith('DSPACK:')) {
+  if (raw.indexOf('DSPACK:') === 0) {
     try {
       const decoded = JSON.parse(atob(raw.slice(7)));
       if (Array.isArray(decoded)) {
@@ -918,7 +905,8 @@ function renderQB() {
   const list = getQB();
   const container = document.getElementById('qbListContainer');
   const sel = document.getElementById('qbQuickSelect');
-  sel.innerHTML = '<option value="">-- Load from My QBs (' + list.length + ') --</option>';
+  if (!container || !sel) return;
+  sel.innerHTML = '<option value="">-- Load from My QB (' + list.length + ') --</option>';
   container.innerHTML = '';
   list.forEach(function(item, i) {
     const opt = document.createElement('option');
@@ -929,257 +917,229 @@ function renderQB() {
     const row = document.createElement('div');
     row.className = 'player-item';
     row.innerHTML = '<div style="font-size:13px;"><b>' + escapeHtml(item.q) + '</b><br><span style="color:var(--green);">Ans: ' + escapeHtml(item.a) + '</span></div>' +
-      '<button class="pill" type="button" onclick="deleteQBItem(' + i + ')">🗑</button>';
+      '<button class="pill" onclick="deleteQBItem(' + i + ')">🗑</button>';
     container.appendChild(row);
   });
 }
 function pickFromQB() {
   const idx = document.getElementById('qbQuickSelect').value;
   if (idx === '') return;
-  const item = getQB()[parseInt(idx, 10)];
-  if (item) {
-    document.getElementById('liveQuestionInput').value = item.q;
-    document.getElementById('liveAnswerInput').value = item.a;
-  }
+const item = getQB()[parseInt(idx, 10)];
+if (item) {
+document.getElementById('liveQuestionInput').value = item.q;
+document.getElementById('liveAnswerInput').value = item.a;
 }
-
+}
 function saveCreatorUrl() {
-  const url = document.getElementById('creatorUrlInput').value.trim();
-  localStorage.setItem('ds_creator_url', url);
-  renderCreatorUrl();
+const url = document.getElementById('creatorUrlInput').value.trim();
+localStorage.setItem('ds_creator_url', url);
+renderCreatorUrl();
 }
 function renderCreatorUrl() {
-  const url = localStorage.getItem('ds_creator_url') || '';
-  const box = document.getElementById('creatorLinkDisplay');
-  if (url) {
-    box.innerHTML = '<a href="' + escapeHtml(url) + '" target="_blank" rel="noopener" class="btn btn-gold" style="display:block;text-align:center;text-decoration:none;">🎟️ Buy Tournament Ticket / Support Creator</a>';
-  } else {
-    box.innerHTML = '';
-  }
+const url = localStorage.getItem('ds_creator_url') || '';
+const box = document.getElementById('creatorLinkDisplay');
+if (!box) return;
+if (url) {
+box.innerHTML = '🎟️ Buy Tournament Ticket / Support Creator';
+} else {
+box.innerHTML = '';
 }
-
+}
 function openHowToPlay() {
-  document.getElementById('howToPlayModal').classList.remove('hidden');
+document.getElementById('howToPlayModal').classList.remove('hidden');
 }
-
 function escapeHtml(str) {
-  return String(str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+return String(str || '').replace(/&/g, '&').replace(/</g, '<').replace(/>/g, '>').replace(/"/g, '"');
 }
-
-
 let currentCode = '';
 let myPlayerId = '';
 let pollTimer = null;
-
 async function apiPost(url, body) {
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body)
-  });
-  return res.json();
+const res = await fetch(url, {
+method: 'POST',
+headers: { 'Content-Type': 'application/json' },
+body: JSON.stringify(body)
+});
+return res.json();
 }
-
 async function createRoom() {
-  const name = document.getElementById('hostNameInput').value.trim() || 'Host';
-  const mode = document.getElementById('gameModeSelect').value;
-  const rounds = parseInt(document.getElementById('roundsInput').value || 5, 10);
-  const timer = parseInt(document.getElementById('timerInput').value || 30, 10);
-  const res = await apiPost('/api/create', { name: name, mode: mode, rounds: rounds, timer: timer });
-  if (res.ok) enterRoom(res.room, res.player_id);
-  else alert(res.error || 'Failed to create room');
+const name = document.getElementById('hostNameInput').value.trim() || 'Host';
+const mode = document.getElementById('gameModeSelect').value;
+const rounds = parseInt(document.getElementById('roundsInput').value || 5, 10);
+const timer = parseInt(document.getElementById('timerInput').value || 30, 10);
+const res = await apiPost('/api/create', { name: name, mode: mode, rounds: rounds, timer: timer });
+if (res.ok) enterRoom(res.room, res.player_id);
+else alert(res.error || 'Failed to create room');
 }
-
 async function joinRoom() {
-  const name = document.getElementById('joinNameInput').value.trim() || 'Player';
-  const code = document.getElementById('joinCodeInput').value.trim().toUpperCase();
-  if (!code) { alert('Enter a 4-letter room code'); return; }
-  const res = await apiPost('/api/join', { name: name, code: code });
-  if (res.ok) enterRoom(res.room, res.player_id);
-  else alert(res.error || 'Could not join room');
+const name = document.getElementById('joinNameInput').value.trim() || 'Player';
+const code = document.getElementById('joinCodeInput').value.trim().toUpperCase();
+if (!code) { alert('Enter a 4-letter room code'); return; }
+const res = await apiPost('/api/join', { name: name, code: code });
+if (res.ok) enterRoom(res.room, res.player_id);
+else alert(res.error || 'Could not join room');
 }
-
 function enterRoom(room, pid) {
-  currentCode = room.code;
-  myPlayerId = pid;
-  document.getElementById('homeView').classList.add('hidden');
-  document.getElementById('roomView').classList.remove('hidden');
-  renderQB();
-  renderRoom(room);
-  if (pollTimer) clearInterval(pollTimer);
-  pollTimer = setInterval(async function() {
-    try {
-      const r = await fetch('/api/state/' + currentCode);
-      const data = await r.json();
-      if (data.ok) renderRoom(data.room);
-    } catch (e) {}
-  }, 1500);
+currentCode = room.code;
+myPlayerId = pid;
+document.getElementById('homeView').classList.add('hidden');
+document.getElementById('roomView').classList.remove('hidden');
+renderQB();
+renderRoom(room);
+if (pollTimer) clearInterval(pollTimer);
+pollTimer = setInterval(async function() {
+try {
+const r = await fetch('/api/state/' + currentCode);
+const data = await r.json();
+if (data.ok) renderRoom(data.room);
+} catch (e) {}
+}, 1500);
 }
-
 function copyInviteLink() {
-  const link = location.origin + '/?room=' + currentCode;
-  if (navigator.clipboard) navigator.clipboard.writeText(link);
-  alert('Copied invite link: ' + link);
+const link = location.origin + '/?room=' + currentCode;
+if (navigator.clipboard) navigator.clipboard.writeText(link);
+alert('Copied invite link: ' + link);
 }
-
 async function kickPlayer(targetId) {
-  const res = await apiPost('/api/kick', { code: currentCode, host_id: myPlayerId, target_id: targetId });
-  if (res.ok) renderRoom(res.room);
+const res = await apiPost('/api/kick', { code: currentCode, host_id: myPlayerId, target_id: targetId });
+if (res.ok) renderRoom(res.room);
 }
-
 async function startMatch() {
-  const res = await apiPost('/api/start', { code: currentCode, player_id: myPlayerId });
-  if (res.ok) renderRoom(res.room);
+const res = await apiPost('/api/start', { code: currentCode, player_id: myPlayerId });
+if (res.ok) renderRoom(res.room);
 }
-
 async function sendQuestion() {
-  const question = document.getElementById('liveQuestionInput').value.trim();
-  const answer = document.getElementById('liveAnswerInput').value.trim();
-  if (!question || !answer) { alert('Enter both a question and answer'); return; }
-  const res = await apiPost('/api/ask', { code: currentCode, question: question, answer: answer });
-  if (res.ok) {
-    document.getElementById('liveQuestionInput').value = '';
-    document.getElementById('liveAnswerInput').value = '';
-    renderRoom(res.room);
-  }
+const question = document.getElementById('liveQuestionInput').value.trim();
+const answer = document.getElementById('liveAnswerInput').value.trim();
+if (!question || !answer) { alert('Enter both a question and answer'); return; }
+const res = await apiPost('/api/ask', { code: currentCode, question: question, answer: answer });
+if (res.ok) {
+document.getElementById('liveQuestionInput').value = '';
+document.getElementById('liveAnswerInput').value = '';
+renderRoom(res.room);
 }
-
+}
 async function submitGuess() {
-  const guess = document.getElementById('playerGuessInput').value.trim();
-  const res = await apiPost('/api/guess', { code: currentCode, player_id: myPlayerId, guess: guess });
-  if (res.ok) {
-    document.getElementById('playerGuessInput').value = '';
-    renderRoom(res.room);
-  }
+const guess = document.getElementById('playerGuessInput').value.trim();
+const res = await apiPost('/api/guess', { code: currentCode, player_id: myPlayerId, guess: guess });
+if (res.ok) {
+document.getElementById('playerGuessInput').value = '';
+renderRoom(res.room);
 }
-
+}
 async function contestRuling() {
-  const res = await apiPost('/api/contest', { code: currentCode });
-  if (res.ok) renderRoom(res.room);
+const res = await apiPost('/api/contest', { code: currentCode });
+if (res.ok) renderRoom(res.room);
 }
-
 async function resolveContest(acceptGuesser) {
-  const res = await apiPost('/api/resolve_contest', { code: currentCode, accept_guesser: acceptGuesser });
-  if (res.ok) renderRoom(res.room);
+const res = await apiPost('/api/resolve_contest', { code: currentCode, accept_guesser: acceptGuesser });
+if (res.ok) renderRoom(res.room);
 }
-
 async function nextRound() {
-  const res = await apiPost('/api/next_round', { code: currentCode });
-  if (res.ok) renderRoom(res.room);
+const res = await apiPost('/api/next_round', { code: currentCode });
+if (res.ok) renderRoom(res.room);
 }
-
 function renderRoom(room) {
-  const me = room.players.find(function(p) { return p.id === myPlayerId; });
-  if (!me) {
-    alert('You were removed from the room.');
-    location.href = '/';
-    return;
-  }
-  const isHost = (room.host_id === myPlayerId);
-  document.getElementById('roomCodeBadge').textContent = 'ROOM: ' + room.code;
-  document.getElementById('roomModeBadge').textContent = room.mode === 'umpire' ? 'UMPIRE MODE' : 'STANDARD MODE';
-  document.getElementById('roundBadge').textContent = 'Round ' + room.current_round + '/' + room.total_rounds;
-
-  const sb = document.getElementById('scoreboardArea');
-  sb.innerHTML = '';
-  room.players.forEach(function(p) {
-    const div = document.createElement('div');
-    div.className = 'player-item';
-    const roleTag = p.is_umpire ? '<span class="badge" style="color:var(--gold);">🎙 Umpire (Organizer)</span>' :
-      '<span style="font-weight:900;color:var(--green);">' + p.score + ' pts</span> <span style="font-size:11px;color:var(--muted);">(' + p.total_time + 's)</span>';
-    const kickBtn = (isHost && p.id !== myPlayerId) ? ' <button class="pill" type="button" onclick="kickPlayer('' + p.id + '')">Kick</button>' : '';
-    div.innerHTML = '<div><b>' + escapeHtml(p.name) + '</b>' + (p.id === myPlayerId ? ' (You)' : '') + '</div><div>' + roleTag + kickBtn + '</div>';
-    sb.appendChild(div);
-  });
-
-  ['lobbyPhase', 'askingPhase', 'answeringPhase', 'reviewPhase', 'gameoverPhase'].forEach(function(id) {
-    document.getElementById(id).classList.add('hidden');
-  });
-
-  if (room.phase === 'lobby') {
-    document.getElementById('lobbyPhase').classList.remove('hidden');
-    document.getElementById('startMatchBtn').classList.toggle('hidden', !isHost);
-  } else if (room.phase === 'asking') {
-    document.getElementById('askingPhase').classList.remove('hidden');
-    const setter = room.players[room.setter_idx % room.players.length];
-    const amAsker = (room.mode === 'umpire') ? me.is_umpire : (setter && setter.id === myPlayerId);
-    document.getElementById('askerControls').classList.toggle('hidden', !amAsker);
-    document.getElementById('waitingAskerBox').classList.toggle('hidden', amAsker);
-    if (amAsker) {
-      document.getElementById('askerTitle').textContent = room.mode === 'umpire'
-        ? '🎙 Ask All Players Simultaneously'
-        : '✍️ Your Turn to Set a Question';
-    }
-  } else if (room.phase === 'answering') {
-    document.getElementById('answeringPhase').classList.remove('hidden');
-    document.getElementById('activeQuestionText').textContent = '❓ ' + room.question;
-    document.getElementById('activeHintText').textContent = '💡 Hint: ' + room.hint;
-
-    const setter = room.players[room.setter_idx % room.players.length];
-    const isAsker = (room.mode === 'umpire') ? me.is_umpire : (setter && setter.id === myPlayerId);
-    const alreadySubmitted = Boolean(room.submissions && room.submissions[myPlayerId]);
-
-    document.getElementById('guesserInputBox').classList.toggle('hidden', isAsker || alreadySubmitted);
-    document.getElementById('submittedWaitBox').classList.toggle('hidden', !isAsker && !alreadySubmitted);
-    if (isAsker) {
-      document.getElementById('submittedWaitBox').innerHTML = '<p style="color:var(--accent);font-weight:700;">⏳ Players are answering your question...</p>';
-    }
-
-    const elapsed = (Date.now() / 1000) - room.question_sent_at;
-    const rem = Math.max(0, Math.ceil(room.timer - elapsed));
-    document.getElementById('countdownDisplay').textContent = '⏱ ' + rem + 's';
-    if (rem <= 0 && isHost) {
-      apiPost('/api/timeout', { code: currentCode });
-    }
-  } else if (room.phase === 'review') {
-    document.getElementById('reviewPhase').classList.remove('hidden');
-    document.getElementById('revealAnswerText').textContent = room.answer;
-
-    const subList = document.getElementById('submissionsList');
-    subList.innerHTML = '';
-    const subs = Object.values(room.submissions || {});
-    if (!subs.length) {
-      subList.innerHTML = '<p style="color:var(--muted);">No answers submitted before time expired (0 pts awarded).</p>';
-    } else {
-      subs.forEach(function(s) {
-        const badge = s.correct
-          ? '<span style="color:var(--green);font-weight:800;">✅ +5 pts (' + s.time + 's)</span>'
-          : '<span style="color:var(--red);font-weight:800;">❌ 0 pts (' + s.time + 's)</span>';
-        subList.innerHTML += '<div class="player-item"><div><b>' + escapeHtml(s.name) + ':</b> ' + escapeHtml(s.guess) + '</div><div>' + badge + '</div></div>';
-      });
-    }
-
-    const contestArea = document.getElementById('contestArea');
-    if (room.mode === 'standard') {
-      contestArea.classList.remove('hidden');
-      const setter = room.players[room.setter_idx % room.players.length];
-      const amSetter = setter && setter.id === myPlayerId;
-      document.getElementById('contestBtn').classList.toggle('hidden', amSetter || room.contest_pending);
-      document.getElementById('setterApprovalBox').classList.toggle('hidden', !amSetter || !room.contest_pending);
-    } else {
-      contestArea.classList.add('hidden');
-    }
-
-    document.getElementById('nextRoundBtn').classList.toggle('hidden', !isHost || room.contest_pending);
-  } else if (room.phase === 'gameover') {
-    document.getElementById('gameoverPhase').classList.remove('hidden');
-    const ranked = room.players.filter(function(p) { return !p.is_umpire; }).sort(function(a, b) {
-      return (b.score - a.score) || (a.total_time - b.total_time);
-    });
-    const pod = document.getElementById('finalPodium');
-    pod.innerHTML = '';
-    ranked.forEach(function(p, idx) {
-      const medal = idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : '#' + (idx + 1);
-      pod.innerHTML += '<div class="player-item"><div><b>' + medal + ' ' + escapeHtml(p.name) + '</b></div><div><b style="color:var(--gold);">' + p.score + ' pts</b> (' + p.total_time + 's)</div></div>';
-    });
-  }
+const me = room.players.find(function(p) { return p.id === myPlayerId; });
+if (!me) {
+alert('You were removed from the room.');
+location.href = '/';
+return;
 }
-
+const isHost = (room.host_id === myPlayerId);
+document.getElementById('roomCodeBadge').textContent = 'ROOM: ' + room.code;
+document.getElementById('roomModeBadge').textContent = room.mode === 'umpire' ? 'UMPIRE MODE' : 'STANDARD MODE';
+document.getElementById('roundBadge').textContent = 'Round ' + room.current_round + '/' + room.total_rounds;
+const sb = document.getElementById('scoreboardArea');
+sb.innerHTML = '';
+room.players.forEach(function(p) {
+const div = document.createElement('div');
+div.className = 'player-item';
+const roleTag = p.is_umpire
+? '🎙 Umpire (Organizer)'
+: '' + p.score + ' pts (' + p.total_time + 's)';
+const kickBtn = (isHost && p.id !== myPlayerId) ? ' Kick' : '';
+div.innerHTML = '' + escapeHtml(p.name) + '' + (p.id === myPlayerId ? ' (You)' : '') + '' + roleTag + kickBtn + '';
+sb.appendChild(div);
+});
+['lobbyPhase', 'askingPhase', 'answeringPhase', 'reviewPhase', 'gameoverPhase'].forEach(function(id) {
+document.getElementById(id).classList.add('hidden');
+});
+if (room.phase === 'lobby') {
+document.getElementById('lobbyPhase').classList.remove('hidden');
+document.getElementById('startMatchBtn').classList.toggle('hidden', !isHost);
+} else if (room.phase === 'asking') {
+document.getElementById('askingPhase').classList.remove('hidden');
+const setter = room.players[room.setter_idx % room.players.length];
+const amAsker = (room.mode === 'umpire') ? me.is_umpire : (setter && setter.id === myPlayerId);
+document.getElementById('askerControls').classList.toggle('hidden', !amAsker);
+document.getElementById('waitingAskerBox').classList.toggle('hidden', amAsker);
+if (amAsker) {
+document.getElementById('askerTitle').textContent = room.mode === 'umpire'
+? '🎙 Ask All Players Simultaneously'
+: '✍️ Your Turn to Set a Question';
+}
+} else if (room.phase === 'answering') {
+document.getElementById('answeringPhase').classList.remove('hidden');
+document.getElementById('activeQuestionText').textContent = '❓ ' + room.question;
+document.getElementById('activeHintText').textContent = '💡 Hint: ' + room.hint;
+const setter = room.players[room.setter_idx % room.players.length];
+const isAsker = (room.mode === 'umpire') ? me.is_umpire : (setter && setter.id === myPlayerId);
+const alreadySubmitted = Boolean(room.submissions && room.submissions[myPlayerId]);
+document.getElementById('guesserInputBox').classList.toggle('hidden', isAsker || alreadySubmitted);
+document.getElementById('submittedWaitBox').classList.toggle('hidden', !isAsker && !alreadySubmitted);
+if (isAsker) {
+document.getElementById('submittedWaitBox').innerHTML = '⏳ Players are answering your question...';
+}
+const elapsed = (Date.now() / 1000) - room.question_sent_at;
+const rem = Math.max(0, Math.ceil(room.timer - elapsed));
+document.getElementById('countdownDisplay').textContent = '⏱ ' + rem + 's';
+if (rem <= 0 && isHost) {
+apiPost('/api/timeout', { code: currentCode });
+}
+} else if (room.phase === 'review') {
+document.getElementById('reviewPhase').classList.remove('hidden');
+document.getElementById('revealAnswerText').textContent = room.answer;
+const subList = document.getElementById('submissionsList');
+subList.innerHTML = '';
+const subs = Object.values(room.submissions || {});
+if (!subs.length) {
+subList.innerHTML = 'No answers submitted before time expired (0 pts awarded).';
+} else {
+subs.forEach(function(s) {
+const badge = s.correct
+? '✅ +5 pts (' + s.time + 's)'
+: '❌ 0 pts (' + s.time + 's)';
+subList.innerHTML += '' + escapeHtml(s.name) + ': ' + escapeHtml(s.guess) + '' + badge + '';
+});
+}
+const contestArea = document.getElementById('contestArea');
+if (room.mode === 'standard') {
+contestArea.classList.remove('hidden');
+const setter = room.players[room.setter_idx % room.players.length];
+const amSetter = setter && setter.id === myPlayerId;
+document.getElementById('contestBtn').classList.toggle('hidden', amSetter || room.contest_pending);
+document.getElementById('setterApprovalBox').classList.toggle('hidden', !amSetter || !room.contest_pending);
+} else {
+contestArea.classList.add('hidden');
+}
+document.getElementById('nextRoundBtn').classList.toggle('hidden', !isHost || room.contest_pending);
+} else if (room.phase === 'gameover') {
+document.getElementById('gameoverPhase').classList.remove('hidden');
+const ranked = room.players.filter(function(p) { return !p.is_umpire; }).sort(function(a, b) { return (b.score - a.score) || (a.total_time - b.total_time); });
+const pod = document.getElementById('finalPodium');
+pod.innerHTML = '';
+ranked.forEach(function(p, idx) {
+const medal = idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : '#' + (idx + 1);
+pod.innerHTML += '' + medal + ' ' + escapeHtml(p.name) + '' + p.score + ' pts (' + p.total_time + 's)';
+});
+}
+}
 window.addEventListener('DOMContentLoaded', function() {
-  renderCreatorUrl();
-  const params = new URLSearchParams(location.search);
-  const code = params.get('room');
-  if (code) document.getElementById('joinCodeInput').value = code.toUpperCase().slice(0, 4);
+renderCreatorUrl();
+const params = new URLSearchParams(location.search);
+const code = params.get('room');
+if (code) document.getElementById('joinCodeInput').value = code.toUpperCase().slice(0, 4);
 });
 </script>
 </body>
