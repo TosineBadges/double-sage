@@ -444,7 +444,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
 <body>
 
 <div id="introOverlay" onclick="dismissIntroNow(event)">
-  <button id="skipIntroBtn" type="button" onclick="dismissIntroNow(event)" ontouchend="dismissIntroNow(event)">Skip Intro ⏭</button>
+  <button id="skipIntroBtn" type="button" style="position:fixed;top:16px;right:16px;z-index:2147483647;background:#facc15;color:#000;border:none;padding:10px 18px;border-radius:999px;font-weight:900;cursor:pointer;" onclick="this.parentElement.style.display='none';">Skip Intro ⏭</button>
   <img id="introSlideImg" src="/double_sage_icon.jpg" alt="Double Sage" onerror="this.style.display='none';document.getElementById('introFallbackCrest').classList.remove('hidden');">
   <div id="introFallbackCrest" class="hidden">⚔️</div>
   <div id="introTitle">DOUBLE SAGE — BATTLE OF MINDS</div>
@@ -963,10 +963,9 @@ function openHowToPlay() {
 }
 
 function escapeHtml(str) {
-  return String(str || '').replace(/[&<>"']/g, function(m) {
-    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m];
-  });
+  return String(str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
+
 
 let currentCode = '';
 let myPlayerId = '';
