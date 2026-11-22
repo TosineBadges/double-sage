@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Double Sage — Pass & Play</title>
+<script src="https://jsdelivr.net"></script>
 <style>
   :root {
     --bg: #090d16;
@@ -286,6 +287,15 @@
       <input id="packCodeInput" placeholder="Enter pack code">
       <button class="btn btn-green btn-sm" type="button" onclick="redeemPack()">Unlock</button>
     </div>
+        <label>📊 Import Questions from Excel (.xlsx) or CSV (.csv)</label>
+    <div class="row" style="margin-top:4px;">
+      <label class="btn btn-primary btn-sm" style="text-align:center;margin:0;cursor:pointer;">
+        📂 Upload Excel / CSV
+        <input type="file" id="qbFileImport" accept=".csv,.xlsx,.xls" style="display:none" onchange="importQBSpreadsheet(this)">
+      </label>
+      <button class="btn btn-dark btn-sm" type="button" onclick="downloadSampleCSV()">📄 Sample CSV</button>
+    </div>
+    <div id="importStatusMsg" style="font-size:12px;color:var(--green);margin-top:4px;"></div>
     <div style="margin-top:8px;">
       <button class="btn btn-dark btn-sm" type="button" onclick="exportSellablePack()">📤 Export My QB as Sellable DSPACK Code</button>
       <textarea id="exportedPackBox" class="hidden" rows="2" style="margin-top:6px;font-size:11px;" readonly></textarea>
@@ -626,6 +636,56 @@ function redeemPack() {
     } catch (e) {}
   }
   alert('Invalid pack code.');
+}
+function downloadSampleCSV() {
+  const csv = 'Question,Answer\n"Who is the president of Nigeria?","Bola Ahmed Tinubu"\n"What is 25 * 4?","100"\n"What is the capital of Ogun State?","Abeokuta"\n';
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'double_sage_template.csv';
+  a.click();
+}
+
+function importQBSpreadsheet(inp) {
+  if (!inp.files || !inp.files[0]) return;
+  const file = inp.files[0];
+  const statusEl = document.getElementById('importStatusMsg');
+  const reader = new FileReader();
+
+  reader.onload = function(e) {
+    try {
+      let rows = [];
+      if (typeof XLSX !== 'undefined') {
+        const wb = XLSX.read(new Uint8Array(e.target.result), { type: 'array' });
+        const sheet = wb.Sheets[wb.SheetNames[0]];
+        rows = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+      } else {
+        const text = new TextDecoder().decode(e.target.result);
+        rows = text.split(/\r?\n/).map(function(line) { return line.split(','); });
+      }
+
+      const list = getQB();
+      let added = 0;
+      rows.forEach(function(row, idx) {
+        if (!row || row.length < 2) return;
+        const q = String(row[0] || '').trim();
+        const a = String(row[1] || '').trim();
+        if (!q || !a) return;
+        if (idx === 0 && (q.toLowerCase() === 'question' || q.toLowerCase() === 'q') && (a.toLowerCase() === 'answer' || a.toLowerCase() === 'a')) {
+          return;
+        }
+        list.push({ q: q, a: a });
+        added++;
+      });
+
+      saveQB(list);
+      inp.value = '';
+      if (statusEl) statusEl.textContent = '✅ Imported ' + added + ' questions! Tap Export below to create a sellable DSPACK code.';
+    } catch (err) {
+      if (statusEl) statusEl.textContent = '❌ Could not read file. Use a 2-column CSV or Excel sheet.';
+    }
+  };
+  reader.readAsArrayBuffer(file);
 }
 function exportSellablePack() {
   const list = getQB();
