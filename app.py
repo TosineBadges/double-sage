@@ -545,9 +545,15 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
       <div id="askerControls" class="hidden">
         <h3 id="askerTitle">✍️ Set Your Question & Secret Answer</h3>
         <div class="row" style="margin-bottom:6px;">
+          <select id="livePackSelect" onchange="syncLivePack()"><option value="">-- Select Pack --</option></select>
+          <button class="btn btn-gold btn-sm" type="button" onclick="autoPickNextQuestion()">🎲 Auto-Next</button>
+        </div>
+        <div class="row" style="margin-bottom:6px;">
           <select id="qbQuickSelect"><option value="">-- Load from My QBs --</option></select>
           <button class="btn btn-dark btn-sm" type="button" onclick="pickFromQB()">Load QB</button>
         </div>
+
+        
         <label>Question</label>
         <input id="liveQuestionInput" placeholder="e.g. Who is the president of Nigeria? or 20 * 5">
         <label>Secret Answer</label>
@@ -619,29 +625,30 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
     <p style="font-size:14px;line-height:1.5;"><b>3. Smart AI Helper & My QBs:</b> Tap <b>✨ Suggest</b> when writing questions to auto-solve math (like <code>20 * 5</code>) or pull factual answers (personal questions like <i>"What is my nickname?"</i> stay private). Save question sets in <b>📚 My QBs</b> or unlock Pro Packs!</p>
   </div>
 </div>
-
 <div id="qbModal" class="modal-bg hidden" onclick="if(event.target===this)this.classList.add('hidden')">
   <div class="modal-box">
-    <div style="display:flex;justify-content:space-between;align-items:center;">
-      <h2 style="color:var(--accent);">📚 My QBs & Pro Packs</h2>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+      <h2 style="color:var(--accent);margin:0;">📚 My QBs — Pro Pack Studio</h2>
       <button class="pill" type="button" onclick="document.getElementById('qbModal').classList.add('hidden')">✕</button>
     </div>
 
-    <label>Add Question to My QB</label>
+    <label>Active Question Pack</label>
+    <div class="row">
+      <select id="activePackSelect" onchange="switchActivePack(this.value)"></select>
+      <button class="btn btn-primary btn-sm" type="button" onclick="createNewPack()">➕ New Pack</button>
+      <button class="btn btn-red btn-sm" type="button" onclick="deleteActivePack()">🗑</button>
+    </div>
+
+    <label>Add Question to Current Pack</label>
     <input id="qbQInput" placeholder="Enter question">
     <div class="row" style="margin-top:6px;">
       <input id="qbAInput" placeholder="Enter answer">
       <button class="btn btn-gold btn-sm" type="button" onclick="suggestAnswer('qbQInput','qbAInput','qbAiStatus')">✨ Suggest</button>
     </div>
     <div id="qbAiStatus" style="font-size:12px;color:var(--accent);margin-top:4px;"></div>
-    <button class="btn btn-primary btn-sm" type="button" style="margin-top:8px;" onclick="addQBItem()">➕ Save to My QB</button>
+    <button class="btn btn-primary btn-sm" type="button" style="margin-top:8px;" onclick="addQBItem()">➕ Save Question</button>
 
-    <label>🎟️ Unlock Pro QB Pack (e.g., NAIJA2026, FOOTYPRO, PARTYVIP, or DSPACK:...)</label>
-    <div class="row">
-      <input id="packCodeInput" placeholder="Enter pack code">
-      <button class="btn btn-green btn-sm" type="button" onclick="redeemPack()">Unlock</button>
-    </div>
-        <label>📊 Import Questions from Excel (.xlsx) or CSV (.csv)</label>
+    <label>📊 Import Excel (.xlsx) or CSV (.csv) into Current Pack</label>
     <div class="row" style="margin-top:4px;">
       <label class="btn btn-primary btn-sm" style="text-align:center;margin:0;cursor:pointer;">
         📂 Upload Excel / CSV
@@ -650,14 +657,34 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
       <button class="btn btn-dark btn-sm" type="button" onclick="downloadSampleCSV()">📄 Sample CSV</button>
     </div>
     <div id="importStatusMsg" style="font-size:12px;color:var(--green);margin-top:4px;"></div>
-    <div style="margin-top:8px;">
-      <button class="btn btn-dark btn-sm" type="button" onclick="exportSellablePack()">📤 Export My QB as Sellable DSPACK Code</button>
-      <textarea id="exportedPackBox" class="hidden" rows="2" style="margin-top:6px;font-size:11px;" readonly></textarea>
+
+    <label>🎟️ Unlock Pro QB Pack (NAIJA2026, FOOTYPRO, PARTYVIP, or DSPACK:...)</label>
+    <div class="row">
+      <input id="packCodeInput" placeholder="Paste pack code here">
+      <button class="btn btn-green btn-sm" type="button" onclick="redeemPack()">Unlock</button>
     </div>
 
-    <div id="qbListContainer" style="margin-top:12px;"></div>
+    <div id="exportSectionBox" style="margin-top:10px;background:#0b1120;padding:10px;border-radius:10px;border:1px solid #1e293b;">
+      <label style="margin-top:0;display:flex;align-items:center;gap:6px;cursor:pointer;">
+        <input type="checkbox" id="lockPackCheckbox" style="width:auto;">
+        <span>🔒 Lock Pack from Buyer Re-Export (Commercial Protection)</span>
+      </label>
+      <button class="btn btn-gold btn-sm" type="button" style="margin-top:6px;" onclick="exportSellablePack()">📤 Export Sellable DSPACK Code</button>
+      <textarea id="exportedPackBox" class="hidden" rows="2" style="margin-top:6px;font-size:11px;" readonly></textarea>
+    </div>
+    <div id="lockedPackNotice" class="hidden" style="margin-top:10px;font-size:12px;color:var(--gold);background:#1e293b;padding:8px 10px;border-radius:8px;">
+      🔒 Commercial Pro Pack — Licensed for gameplay (Re-export disabled by creator).
+    </div>
+
+    <div class="row" style="margin-top:12px;">
+      <input id="qbSearchInput" placeholder="🔍 Search questions in this pack..." oninput="renderQB()">
+      <button class="btn btn-dark btn-sm" type="button" onclick="clearCurrentPack()">🧹 Clear Pack</button>
+    </div>
+
+    <div id="qbListContainer" style="margin-top:10px;"></div>
   </div>
 </div>
+
 
 <script>
 const INTRO_SLIDES = [
@@ -831,78 +858,136 @@ async function suggestAnswer(qId, aId, statusId) {
     statusEl.textContent = 'Offline — type your answer manually.';
   }
 }
-
 const PRO_PACKS = {
-  'NAIJA2026': [
-    { q: 'Who is the president of Nigeria?', a: 'Bola Ahmed Tinubu' },
-    { q: 'What is the capital city of Nigeria?', a: 'Abuja' },
-    { q: 'What year did Nigeria gain independence?', a: '1960' },
-    { q: 'What is the largest city by population in Nigeria?', a: 'Lagos' }
-  ],
-  'FOOTYPRO': [
-    { q: 'Which country won the 2022 FIFA World Cup?', a: 'Argentina' },
-    { q: 'Which club has won the most UEFA Champions League titles?', a: 'Real Madrid' },
-    { q: 'How many players are on the pitch for one football team?', a: '11' }
-  ],
-  'PARTYVIP': [
-    { q: 'What is 25 * 4?', a: '100' },
-    { q: 'How many days are in a leap year?', a: '366' },
-    { q: 'Which planet is known as the Red Planet?', a: 'Mars' }
-  ]
+  'NAIJA2026': {
+    title: 'Naija 2026 Pro Pack',
+    locked: true,
+    items: [
+      { q: 'Who is the president of Nigeria?', a: 'Bola Ahmed Tinubu' },
+      { q: 'What is the capital city of Nigeria?', a: 'Abuja' },
+      { q: 'What year did Nigeria gain independence?', a: '1960' },
+      { q: 'What is the largest city by population in Nigeria?', a: 'Lagos' }
+    ]
+  },
+  'FOOTYPRO': {
+    title: 'Football Legends Pro Pack',
+    locked: true,
+    items: [
+      { q: 'Which country won the 2022 FIFA World Cup?', a: 'Argentina' },
+      { q: 'Which club has won the most UEFA Champions League titles?', a: 'Real Madrid' },
+      { q: 'How many players are on the pitch for one football team?', a: '11' }
+    ]
+  },
+  'PARTYVIP': {
+    title: 'Party & Speed Math VIP',
+    locked: true,
+    items: [
+      { q: 'What is 25 * 4?', a: '100' },
+      { q: 'How many days are in a leap year?', a: '366' },
+      { q: 'Which planet is known as the Red Planet?', a: 'Mars' }
+    ]
+  }
 };
 
-function getQB() {
-  try { return JSON.parse(localStorage.getItem('ds_my_qb') || '[]'); } catch (e) { return []; }
+let usedQuestionKeys = {};
+
+function getPackStore() {
+  try {
+    const raw = JSON.parse(localStorage.getItem('ds_qb_packs_v2') || 'null');
+    if (raw && raw.packs && Object.keys(raw.packs).length) return raw;
+  } catch (e) {}
+  // Migrate any legacy flat questions into "My Custom Pack"
+  let legacy = [];
+  try { legacy = JSON.parse(localStorage.getItem('ds_my_qb') || '[]'); } catch (e) {}
+  const store = {
+    activeId: 'custom_default',
+    packs: {
+      custom_default: { title: 'My Custom Pack', locked: false, items: Array.isArray(legacy) ? legacy : [] }
+    }
+  };
+  savePackStore(store);
+  return store;
 }
-function saveQB(list) {
-  localStorage.setItem('ds_my_qb', JSON.stringify(list));
+
+function savePackStore(store) {
+  localStorage.setItem('ds_qb_packs_v2', JSON.stringify(store));
   renderQB();
 }
+
 function openQBModal() {
   renderQB();
   document.getElementById('qbModal').classList.remove('hidden');
 }
+
+function switchActivePack(packId) {
+  const store = getPackStore();
+  if (store.packs[packId]) {
+    store.activeId = packId;
+    savePackStore(store);
+  }
+}
+
+function createNewPack() {
+  const name = prompt('Enter new pack name (e.g. Couples Night, JAMB Drill):');
+  if (!name || !name.trim()) return;
+  const store = getPackStore();
+  const id = 'pack_' + Date.now();
+  store.packs[id] = { title: name.trim().slice(0, 32), locked: false, items: [] };
+  store.activeId = id;
+  savePackStore(store);
+}
+
+function deleteActivePack() {
+  const store = getPackStore();
+  const ids = Object.keys(store.packs);
+  if (ids.length <= 1) { alert('You must keep at least one pack.'); return; }
+  const current = store.packs[store.activeId];
+  if (!confirm('Delete "' + current.title + '" and all its questions?')) return;
+  delete store.packs[store.activeId];
+  store.activeId = Object.keys(store.packs)[0];
+  savePackStore(store);
+}
+
+function clearCurrentPack() {
+  const store = getPackStore();
+  const pack = store.packs[store.activeId];
+  if (!pack || !pack.items.length) return;
+  if (!confirm('Clear all ' + pack.items.length + ' questions in "' + pack.title + '"?')) return;
+  pack.items = [];
+  savePackStore(store);
+}
+
 function addQBItem() {
   const q = document.getElementById('qbQInput').value.trim();
   const a = document.getElementById('qbAInput').value.trim();
   if (!q || !a) return;
-  const list = getQB();
-  list.push({ q: q, a: a });
-  saveQB(list);
+  const store = getPackStore();
+  store.packs[store.activeId].items.push({ q: q, a: a });
+  savePackStore(store);
   document.getElementById('qbQInput').value = '';
   document.getElementById('qbAInput').value = '';
 }
+
+function editQBItem(idx) {
+  const store = getPackStore();
+  const item = store.packs[store.activeId].items[idx];
+  if (!item) return;
+  const newQ = prompt('Edit Question:', item.q);
+  if (newQ === null) return;
+  const newA = prompt('Edit Secret Answer:', item.a);
+  if (newA === null) return;
+  if (newQ.trim() && newA.trim()) {
+    store.packs[store.activeId].items[idx] = { q: newQ.trim(), a: newA.trim() };
+    savePackStore(store);
+  }
+}
+
 function deleteQBItem(idx) {
-  const list = getQB();
-  list.splice(idx, 1);
-  saveQB(list);
+  const store = getPackStore();
+  store.packs[store.activeId].items.splice(idx, 1);
+  savePackStore(store);
 }
-function redeemPack() {
-  const raw = document.getElementById('packCodeInput').value.trim();
-  if (!raw) return;
-  const upper = raw.toUpperCase();
-  const list = getQB();
-  if (PRO_PACKS[upper]) {
-    PRO_PACKS[upper].forEach(function(item) { list.push(item); });
-    saveQB(list);
-    alert('Unlocked ' + PRO_PACKS[upper].length + ' questions from ' + upper + '!');
-    document.getElementById('packCodeInput').value = '';
-    return;
-  }
-  if (raw.indexOf('DSPACK:') === 0) {
-    try {
-      const decoded = JSON.parse(atob(raw.slice(7)));
-      if (Array.isArray(decoded)) {
-        decoded.forEach(function(item) { if (item.q && item.a) list.push({ q: item.q, a: item.a }); });
-        saveQB(list);
-        alert('Imported ' + decoded.length + ' custom pack questions!');
-        document.getElementById('packCodeInput').value = '';
-        return;
-      }
-    } catch (e) {}
-  }
-  alert('Invalid pack code.');
-}
+
 function downloadSampleCSV() {
   const csv = 'Question,Answer\n"Who is the president of Nigeria?","Bola Ahmed Tinubu"\n"What is 25 * 4?","100"\n"What is the capital of Ogun State?","Abeokuta"\n';
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
@@ -930,7 +1015,8 @@ function importQBSpreadsheet(inp) {
         rows = text.split(/\r?\n/).map(function(line) { return line.split(','); });
       }
 
-      const list = getQB();
+      const store = getPackStore();
+      const pack = store.packs[store.activeId];
       let added = 0;
       rows.forEach(function(row, idx) {
         if (!row || row.length < 2) return;
@@ -940,57 +1026,193 @@ function importQBSpreadsheet(inp) {
         if (idx === 0 && (q.toLowerCase() === 'question' || q.toLowerCase() === 'q') && (a.toLowerCase() === 'answer' || a.toLowerCase() === 'a')) {
           return;
         }
-        list.push({ q: q, a: a });
+        pack.items.push({ q: q, a: a });
         added++;
       });
 
-      saveQB(list);
+      savePackStore(store);
       inp.value = '';
-      if (statusEl) statusEl.textContent = '✅ Imported ' + added + ' questions! Tap Export below to create a sellable DSPACK code.';
+      if (statusEl) statusEl.textContent = '✅ Imported ' + added + ' questions into "' + pack.title + '"!';
     } catch (err) {
       if (statusEl) statusEl.textContent = '❌ Could not read file. Use a 2-column CSV or Excel sheet.';
     }
   };
   reader.readAsArrayBuffer(file);
 }
+
+function redeemPack() {
+  const raw = document.getElementById('packCodeInput').value.trim();
+  if (!raw) return;
+  const upper = raw.toUpperCase();
+  const store = getPackStore();
+
+  if (PRO_PACKS[upper]) {
+    const p = PRO_PACKS[upper];
+    const id = 'pro_' + upper.toLowerCase();
+    store.packs[id] = { title: p.title, locked: true, items: p.items.slice() };
+    store.activeId = id;
+    savePackStore(store);
+    alert('Unlocked "' + p.title + '" (' + p.items.length + ' questions)!');
+    document.getElementById('packCodeInput').value = '';
+    return;
+  }
+
+  if (raw.indexOf('DSPACK:') === 0) {
+    try {
+      const decoded = JSON.parse(atob(raw.slice(7)));
+      // Supports both v2 {title, locked, items} and legacy [{q, a}] codes
+      if (decoded && Array.isArray(decoded.items)) {
+        const id = 'pack_' + Date.now();
+        store.packs[id] = {
+          title: String(decoded.title || 'Unlocked Pro Pack').slice(0, 32),
+          locked: Boolean(decoded.locked),
+          items: decoded.items.filter(function(x) { return x && x.q && x.a; })
+        };
+        store.activeId = id;
+        savePackStore(store);
+        alert('Unlocked "' + store.packs[id].title + '" (' + store.packs[id].items.length + ' questions)!');
+        document.getElementById('packCodeInput').value = '';
+        return;
+      } else if (Array.isArray(decoded)) {
+        const id = 'pack_' + Date.now();
+        store.packs[id] = {
+          title: 'Unlocked Pack #' + Object.keys(store.packs).length,
+          locked: false,
+          items: decoded.filter(function(x) { return x && x.q && x.a; })
+        };
+        store.activeId = id;
+        savePackStore(store);
+        alert('Imported ' + store.packs[id].items.length + ' questions!');
+        document.getElementById('packCodeInput').value = '';
+        return;
+      }
+    } catch (e) {}
+  }
+  alert('Invalid pack code.');
+}
+
 function exportSellablePack() {
-  const list = getQB();
-  if (!list.length) { alert('Add questions to My QB first!'); return; }
-  const code = 'DSPACK:' + btoa(JSON.stringify(list));
+  const store = getPackStore();
+  const pack = store.packs[store.activeId];
+  if (pack.locked) { alert('This commercial pack is locked by its creator.'); return; }
+  if (!pack.items.length) { alert('Add questions to "' + pack.title + '" first!'); return; }
+  const lockIt = document.getElementById('lockPackCheckbox').checked;
+  const payload = { title: pack.title, locked: lockIt, items: pack.items };
+  const code = 'DSPACK:' + btoa(JSON.stringify(payload));
   const box = document.getElementById('exportedPackBox');
   box.value = code;
   box.classList.remove('hidden');
   box.select();
 }
-function renderQB() {
-  const list = getQB();
-  const container = document.getElementById('qbListContainer');
-  const sel = document.getElementById('qbQuickSelect');
-  if (!container || !sel) return;
-  sel.innerHTML = '<option value="">-- Load from My QB (' + list.length + ') --</option>';
-  container.innerHTML = '';
-  list.forEach(function(item, i) {
-    const opt = document.createElement('option');
-    opt.value = i;
-    opt.textContent = item.q;
-    sel.appendChild(opt);
 
+function renderQB() {
+  const store = getPackStore();
+  const pack = store.packs[store.activeId] || store.packs[Object.keys(store.packs)[0]];
+  const activeSel = document.getElementById('activePackSelect');
+  const livePackSel = document.getElementById('livePackSelect');
+  const qSel = document.getElementById('qbQuickSelect');
+  const container = document.getElementById('qbListContainer');
+  const searchVal = (document.getElementById('qbSearchInput')?.value || '').toLowerCase().trim();
+
+  if (activeSel) {
+    activeSel.innerHTML = '';
+    Object.keys(store.packs).forEach(function(pid) {
+      const p = store.packs[pid];
+      const opt = document.createElement('option');
+      opt.value = pid;
+      opt.textContent = (p.locked ? '🔒 ' : '📁 ') + p.title + ' (' + p.items.length + ')';
+      if (pid === store.activeId) opt.selected = true;
+      activeSel.appendChild(opt);
+    });
+  }
+
+  if (livePackSel) {
+    const prev = livePackSel.value || store.activeId;
+    livePackSel.innerHTML = '';
+    Object.keys(store.packs).forEach(function(pid) {
+      const p = store.packs[pid];
+      const opt = document.createElement('option');
+      opt.value = pid;
+      opt.textContent = p.title + ' (' + p.items.length + ')';
+      if (pid === prev) opt.selected = true;
+      livePackSel.appendChild(opt);
+    });
+  }
+
+  const exportBox = document.getElementById('exportSectionBox');
+  const lockedNotice = document.getElementById('lockedPackNotice');
+  if (exportBox && lockedNotice) {
+    exportBox.classList.toggle('hidden', Boolean(pack.locked));
+    lockedNotice.classList.toggle('hidden', !pack.locked);
+  }
+
+  const livePid = (livePackSel && livePackSel.value) || store.activeId;
+  const livePack = store.packs[livePid] || pack;
+  if (qSel) {
+    qSel.innerHTML = '<option value="">-- Pick Specific Question (' + livePack.items.length + ') --</option>';
+    livePack.items.forEach(function(item, i) {
+      const opt = document.createElement('option');
+      opt.value = i;
+      opt.textContent = item.q;
+      qSel.appendChild(opt);
+    });
+  }
+
+  if (!container) return;
+  container.innerHTML = '';
+  pack.items.forEach(function(item, i) {
+    if (searchVal && item.q.toLowerCase().indexOf(searchVal) === -1 && item.a.toLowerCase().indexOf(searchVal) === -1) return;
     const row = document.createElement('div');
     row.className = 'player-item';
-    row.innerHTML = '<div style="font-size:13px;"><b>' + escapeHtml(item.q) + '</b><br><span style="color:var(--green);">Ans: ' + escapeHtml(item.a) + '</span></div>' +
-      '<button class="pill" onclick="deleteQBItem(' + i + ')">🗑</button>';
+    row.innerHTML = '<div style="font-size:13px;padding-right:8px;"><b>' + escapeHtml(item.q) + '</b><br><span style="color:var(--green);">Ans: ' + escapeHtml(item.a) + '</span></div>' +
+      '<div style="display:flex;gap:4px;"><button class="pill" type="button" onclick="editQBItem(' + i + ')">✏️</button><button class="pill" type="button" onclick="deleteQBItem(' + i + ')">🗑</button></div>';
     container.appendChild(row);
   });
 }
+
+function syncLivePack() {
+  renderQB();
+}
+
 function pickFromQB() {
+  const store = getPackStore();
+  const livePid = document.getElementById('livePackSelect')?.value || store.activeId;
+  const pack = store.packs[livePid];
   const idx = document.getElementById('qbQuickSelect').value;
-  if (idx === '') return;
-const item = getQB()[parseInt(idx, 10)];
-if (item) {
-document.getElementById('liveQuestionInput').value = item.q;
-document.getElementById('liveAnswerInput').value = item.a;
+  if (idx === '' || !pack) return;
+  const item = pack.items[parseInt(idx, 10)];
+  if (item) {
+    document.getElementById('liveQuestionInput').value = item.q;
+    document.getElementById('liveAnswerInput').value = item.a;
+    usedQuestionKeys[livePid + ':' + idx] = true;
+  }
 }
+
+function autoPickNextQuestion() {
+  const store = getPackStore();
+  const livePid = document.getElementById('livePackSelect')?.value || store.activeId;
+  const pack = store.packs[livePid];
+  if (!pack || !pack.items.length) {
+    alert('This pack is empty! Add or unlock questions in My QBs first.');
+    return;
+  }
+  let unplayed = [];
+  pack.items.forEach(function(item, i) {
+    if (!usedQuestionKeys[livePid + ':' + i]) unplayed.push(i);
+  });
+  if (!unplayed.length) {
+    pack.items.forEach(function(_, i) { delete usedQuestionKeys[livePid + ':' + i]; });
+    unplayed = pack.items.map(function(_, i) { return i; });
+  }
+  const pickIdx = unplayed[Math.floor(Math.random() * unplayed.length)];
+  usedQuestionKeys[livePid + ':' + pickIdx] = true;
+  const chosen = pack.items[pickIdx];
+  document.getElementById('liveQuestionInput').value = chosen.q;
+  document.getElementById('liveAnswerInput').value = chosen.a;
+  const statusEl = document.getElementById('liveAiStatus');
+  if (statusEl) statusEl.textContent = '🎲 Loaded unused question from "' + pack.title + '"!';
 }
+
 function saveCreatorUrl() {
 const url = document.getElementById('creatorUrlInput').value.trim();
 localStorage.setItem('ds_creator_url', url);
