@@ -472,6 +472,26 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
 
 <div class="container">
   <div id="homeView">
+      <div class="card" style="border:1px solid var(--accent);">
+      <h2 style="color:var(--accent);">🤖 Play vs. Sage Bot (Instant Solo Duel)</h2>
+      <p style="font-size:13px;color:var(--muted);margin:0 0 8px;">No opponent online yet? Battle Sage Bot using any pack right now!</p>
+      <div class="row">
+        <div>
+          <label>Select Pack</label>
+          <select id="botPackSelect"></select>
+        </div>
+        <div>
+          <label>Bot Difficulty</label>
+          <select id="botDiffSelect">
+            <option value="rookie">Rookie (Casual)</option>
+            <option value="pro" selected>Pro (Balanced)</option>
+            <option value="grandmaster">Grandmaster (Fast)</option>
+          </select>
+        </div>
+      </div>
+      <button class="btn btn-primary" type="button" onclick="startBotMatch()">🤖 Start Solo Duel vs. Sage Bot</button>
+    </div>
+
     <div class="card">
       <h2>🎮 Create Online Room</h2>
       <label>Your Name</label>
@@ -613,6 +633,66 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
     </div>
   </div>
 </div>
+  <div id="botView" class="hidden">
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <span class="badge" id="botRoundBadge">Round 1/5</span>
+        <span class="badge" id="botDiffBadge" style="color:var(--gold);">🤖 PRO BOT</span>
+        <button class="pill" type="button" onclick="exitBotMatch()">✕ Exit</button>
+      </div>
+      <div class="row" style="margin-top:12px;">
+        <div class="player-item"><b>🧑 You</b><span id="botPlayerScore" style="color:var(--green);font-weight:900;">0 pts</span></div>
+        <div class="player-item"><b>🤖 Sage Bot</b><span id="botAiScore" style="color:var(--gold);font-weight:900;">0 pts</span></div>
+      </div>
+    </div>
+
+    <div id="botAnsweringBox" class="card hidden">
+      <div class="timer-bar" id="botTimerBar">⏱ 30s</div>
+      <div style="font-size:18px;font-weight:800;margin-bottom:8px;" id="botQuestionText"></div>
+      <div class="hint-box" id="botHintText"></div>
+      <label>Your Answer</label>
+      <input id="botUserGuessInput" placeholder="Type your answer before time runs out...">
+      <button class="btn btn-green" type="button" onclick="submitBotUserGuess()">✅ Submit Answer</button>
+    </div>
+
+    <div id="botAskingBox" class="card hidden">
+      <h3>✍️ Your Turn to Challenge Sage Bot!</h3>
+      <div class="row" style="margin-bottom:6px;">
+        <button class="btn btn-gold btn-sm" type="button" onclick="botAutoFillQuestion()">🎲 Auto-Pick From Pack</button>
+      </div>
+      <label>Question for Sage Bot</label>
+      <input id="botCustomQInput" placeholder="Type a question or tap Auto-Pick">
+      <label>Secret Answer</label>
+      <div class="row">
+        <input id="botCustomAInput" placeholder="Type secret answer">
+        <button class="btn btn-gold btn-sm" type="button" onclick="suggestAnswer('botCustomQInput','botCustomAInput','botAiSuggestStatus')">✨ Suggest</button>
+      </div>
+      <div id="botAiSuggestStatus" style="font-size:12px;color:var(--accent);margin-top:4px;"></div>
+      <button class="btn btn-primary" type="button" onclick="sendQuestionToBot()">📤 Challenge Sage Bot</button>
+    </div>
+
+    <div id="botThinkingBox" class="card hidden" style="text-align:center;">
+      <h3 style="color:var(--gold);">🤖 Sage Bot is thinking...</h3>
+      <p id="botThinkingHint" style="color:var(--muted);font-size:13px;"></p>
+    </div>
+
+    <div id="botReviewBox" class="card hidden">
+      <h3>📊 Round Summary</h3>
+      <div id="botResultBanner" style="font-size:16px;font-weight:800;margin-bottom:8px;"></div>
+      <div style="background:#0f172a;padding:10px;border-radius:10px;margin-bottom:10px;">
+        <div style="font-size:12px;color:var(--muted);">Secret Answer:</div>
+        <div style="font-size:18px;font-weight:900;color:var(--green);" id="botRevealAnswer"></div>
+      </div>
+      <button id="botContestBtn" class="btn btn-red hidden" type="button" onclick="contestBotRuling()">⚖️ Contest Ruling (My Answer Was Right!)</button>
+      <button class="btn btn-primary" type="button" onclick="nextBotRound()">➡️ Next Round</button>
+    </div>
+
+    <div id="botGameoverBox" class="card hidden" style="text-align:center;">
+      <h2 id="botFinalHeadline" style="color:var(--gold);">🏆 DUEL COMPLETE!</h2>
+      <p id="botFinalSummary" style="font-size:16px;font-weight:700;"></p>
+      <button class="btn btn-primary" type="button" onclick="exitBotMatch()">🏠 Back to Home</button>
+    </div>
+  </div>
 
 <div id="howToPlayModal" class="modal-bg hidden" onclick="if(event.target===this)this.classList.add('hidden')">
   <div class="modal-box">
@@ -1138,6 +1218,28 @@ function renderQB() {
       livePackSel.appendChild(opt);
     });
   }
+const botPackSel = document.getElementById('botPackSelect');
+if (botPackSel) {
+  botPackSel.innerHTML = '';
+  Object.keys(store.packs).forEach(function(pid) {
+    const p = store.packs[pid];
+    if (p.items && p.items.length > 0) {
+      const opt = document.createElement('option');
+      opt.value = pid;
+      opt.textContent = p.title + ' (' + p.items.length + ' Qs)';
+      botPackSel.appendChild(opt);
+    }
+  });
+  Object.keys(PRO_PACKS).forEach(function(code) {
+    if (!store.packs['pro_' + code.toLowerCase()]) {
+      const opt = document.createElement('option');
+      opt.value = 'builtin_' + code;
+      opt.textContent = '⭐ ' + PRO_PACKS[code].title + ' (' + PRO_PACKS[code].items.length + ' Qs)';
+      botPackSel.appendChild(opt);
+    }
+  });
+}
+
 
   const exportBox = document.getElementById('exportSectionBox');
   const lockedNotice = document.getElementById('lockedPackNotice');
@@ -1418,8 +1520,225 @@ pod.innerHTML += '' + medal + ' ' + escapeHtml(p.name) + '' + p.score + ' pts ('
 });
 }
 }
+// --- SAGE BOT SOLO DUEL ENGINE ---
+let botState = null;
+let botTimerInterval = null;
+
+function computeSmartHint(ans) {
+  const raw = String(ans || '').trim();
+  const words = raw.split(/\s+/).filter(Boolean).length;
+  let letters = 0, digits = 0;
+  for (let i = 0; i < raw.length; i++) {
+    const ch = raw[i];
+    if (/[a-zA-Z]/.test(ch)) letters++;
+    else if (/[0-9]/.test(ch)) digits++;
+  }
+  const parts = [];
+  if (letters > 0) {
+    parts.push(words + (words === 1 ? ' word' : ' words'));
+    parts.push(letters + (letters === 1 ? ' letter' : ' letters'));
+  }
+  if (digits > 0) {
+    parts.push(digits + (digits === 1 ? ' digit' : ' digits'));
+  }
+  return parts.join(', ');
+}
+
+function normBotText(s) {
+  return String(s || '').toLowerCase().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ').trim();
+}
+
+function getBotPackItems(packVal) {
+  if (packVal.indexOf('builtin_') === 0) {
+    const code = packVal.replace('builtin_', '');
+    return (PRO_PACKS[code] && PRO_PACKS[code].items) ? PRO_PACKS[code].items.slice() : [];
+  }
+  const store = getPackStore();
+  return (store.packs[packVal] && store.packs[packVal].items) ? store.packs[packVal].items.slice() : [];
+}
+
+function startBotMatch() {
+  const packVal = document.getElementById('botPackSelect').value;
+  const diff = document.getElementById('botDiffSelect').value;
+  const items = getBotPackItems(packVal);
+  if (!items.length) { alert('Please select a pack with questions!'); return; }
+
+  botState = {
+    items: items,
+    used: {},
+    diff: diff,
+    round: 1,
+    totalRounds: Math.min(6, Math.max(4, items.length)),
+    userScore: 0,
+    botScore: 0,
+    currentQ: '',
+    currentA: '',
+    lastUserMissed: false
+  };
+
+  document.getElementById('homeView').classList.add('hidden');
+  document.getElementById('botView').classList.remove('hidden');
+  document.getElementById('botDiffBadge').textContent = '🤖 ' + diff.toUpperCase() + ' BOT';
+  updateBotScores();
+  runBotTurn();
+}
+
+function exitBotMatch() {
+  if (botTimerInterval) clearInterval(botTimerInterval);
+  botState = null;
+  document.getElementById('botView').classList.add('hidden');
+  document.getElementById('homeView').classList.remove('hidden');
+}
+
+function updateBotScores() {
+  if (!botState) return;
+  document.getElementById('botRoundBadge').textContent = 'Round ' + botState.round + '/' + botState.totalRounds;
+  document.getElementById('botPlayerScore').textContent = botState.userScore + ' pts';
+  document.getElementById('botAiScore').textContent = botState.botScore + ' pts';
+}
+
+function hideAllBotBoxes() {
+  ['botAnsweringBox', 'botAskingBox', 'botThinkingBox', 'botReviewBox', 'botGameoverBox'].forEach(function(id) {
+    document.getElementById(id).classList.add('hidden');
+  });
+}
+
+function pickUnusedBotItem() {
+  const avail = [];
+  botState.items.forEach(function(_, i) { if (!botState.used[i]) avail.push(i); });
+  if (!avail.length) {
+    botState.used = {};
+    botState.items.forEach(function(_, i) { avail.push(i); });
+  }
+  const idx = avail[Math.floor(Math.random() * avail.length)];
+  botState.used[idx] = true;
+  return botState.items[idx];
+}
+
+function runBotTurn() {
+  hideAllBotBoxes();
+  updateBotScores();
+  if (botState.round % 2 === 1) {
+    // Odd round: Sage Bot asks the player
+    const item = pickUnusedBotItem();
+    botState.currentQ = item.q;
+    botState.currentA = item.a;
+    document.getElementById('botQuestionText').textContent = '🤖 Sage Bot asks: ' + item.q;
+    document.getElementById('botHintText').textContent = '💡 Hint: ' + computeSmartHint(item.a);
+    document.getElementById('botUserGuessInput').value = '';
+    document.getElementById('botAnsweringBox').classList.remove('hidden');
+
+    let sec = 30;
+    document.getElementById('botTimerBar').textContent = '⏱ ' + sec + 's';
+    if (botTimerInterval) clearInterval(botTimerInterval);
+    botTimerInterval = setInterval(function() {
+      sec--;
+      document.getElementById('botTimerBar').textContent = '⏱ ' + sec + 's';
+      if (sec <= 0) {
+        clearInterval(botTimerInterval);
+        finishBotUserAnswer('');
+      }
+    }, 1000);
+  } else {
+    // Even round: Player challenges Sage Bot
+    document.getElementById('botCustomQInput').value = '';
+    document.getElementById('botCustomAInput').value = '';
+    document.getElementById('botAskingBox').classList.remove('hidden');
+  }
+}
+
+function submitBotUserGuess() {
+  if (botTimerInterval) clearInterval(botTimerInterval);
+  const guess = document.getElementById('botUserGuessInput').value.trim();
+  finishBotUserAnswer(guess);
+}
+
+function finishBotUserAnswer(guess) {
+  hideAllBotBoxes();
+  const isRight = Boolean(guess) && normBotText(guess) === normBotText(botState.currentA);
+  botState.lastUserMissed = !isRight;
+  if (isRight) {
+    botState.userScore += 5;
+    document.getElementById('botResultBanner').innerHTML = '<span style="color:var(--green);">✅ Spot on! You earned +5 pts!</span>';
+  } else {
+    botState.botScore += 5;
+    document.getElementById('botResultBanner').innerHTML = '<span style="color:var(--red);">❌ Missed (Your guess: "' + escapeHtml(guess || 'Time up') + '"). Sage Bot gets +5 pts!</span>';
+  }
+  document.getElementById('botRevealAnswer').textContent = botState.currentA;
+  document.getElementById('botContestBtn').classList.toggle('hidden', isRight);
+  updateBotScores();
+  document.getElementById('botReviewBox').classList.remove('hidden');
+}
+
+function contestBotRuling() {
+  if (!botState || !botState.lastUserMissed) return;
+  botState.lastUserMissed = false;
+  botState.botScore = Math.max(0, botState.botScore - 5);
+  botState.userScore += 5;
+  document.getElementById('botContestBtn').classList.add('hidden');
+  document.getElementById('botResultBanner').innerHTML = '<span style="color:var(--gold);">⚖️ Contest Accepted! +5 pts transferred to You!</span>';
+  updateBotScores();
+}
+
+function botAutoFillQuestion() {
+  if (!botState) return;
+  const item = pickUnusedBotItem();
+  document.getElementById('botCustomQInput').value = item.q;
+  document.getElementById('botCustomAInput').value = item.a;
+}
+
+function sendQuestionToBot() {
+  const q = document.getElementById('botCustomQInput').value.trim();
+  const a = document.getElementById('botCustomAInput').value.trim();
+  if (!q || !a) { alert('Enter a question and answer, or tap Auto-Pick!'); return; }
+  botState.currentQ = q;
+  botState.currentA = a;
+  hideAllBotBoxes();
+  document.getElementById('botThinkingHint').textContent = 'Analyzing hint: ' + computeSmartHint(a);
+  document.getElementById('botThinkingBox').classList.remove('hidden');
+
+  const delay = botState.diff === 'grandmaster' ? 1800 : (botState.diff === 'pro' ? 3000 : 4200);
+  const winChance = botState.diff === 'grandmaster' ? 0.85 : (botState.diff === 'pro' ? 0.60 : 0.35);
+
+  setTimeout(function() {
+    if (!botState) return;
+    hideAllBotBoxes();
+    const botGotIt = Math.random() < winChance;
+    document.getElementById('botContestBtn').classList.add('hidden');
+    if (botGotIt) {
+      botState.botScore += 5;
+      document.getElementById('botResultBanner').innerHTML = '<span style="color:var(--gold);">🤖 Sage Bot guessed "' + escapeHtml(a) + '" and scored +5 pts!</span>';
+    } else {
+      botState.userScore += 5;
+      document.getElementById('botResultBanner').innerHTML = '<span style="color:var(--green);">🎉 You stumped Sage Bot! You earn +5 pts!</span>';
+    }
+    document.getElementById('botRevealAnswer').textContent = a;
+    updateBotScores();
+    document.getElementById('botReviewBox').classList.remove('hidden');
+  }, delay);
+}
+
+function nextBotRound() {
+  if (!botState) return;
+  if (botState.round >= botState.totalRounds) {
+    hideAllBotBoxes();
+    const msg = botState.userScore > botState.botScore
+      ? '🏆 VICTORY! You defeated Sage Bot (' + botState.userScore + ' - ' + botState.botScore + ')!'
+      : (botState.userScore < botState.botScore
+        ? '🤖 Sage Bot wins (' + botState.botScore + ' - ' + botState.userScore + '). Rematch?'
+        : '🤝 DRAW! Tied at ' + botState.userScore + ' pts!');
+    document.getElementById('botFinalHeadline').textContent = botState.userScore >= botState.botScore ? '🏆 MATCH COMPLETE!' : '🤖 SAGE BOT WINS!';
+    document.getElementById('botFinalSummary').textContent = msg;
+    document.getElementById('botGameoverBox').classList.remove('hidden');
+    return;
+  }
+  botState.round++;
+  runBotTurn();
+}
+
 window.addEventListener('DOMContentLoaded', function() {
 renderCreatorUrl();
+renderQB();
 const params = new URLSearchParams(location.search);
 const code = params.get('room');
 if (code) document.getElementById('joinCodeInput').value = code.toUpperCase().slice(0, 4);
