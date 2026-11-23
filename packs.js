@@ -322,4 +322,5 @@ window.PRO_PACKS['PARTYVIP'] = {
 if (typeof PRO_PACKS !== 'undefined') {
   Object.assign(PRO_PACKS, window.PRO_PACKS);
 }
+if (typeof renderQB === 'function') renderQB();
 
