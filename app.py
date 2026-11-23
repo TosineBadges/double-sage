@@ -341,7 +341,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Double Sage — Online Multiplayer</title>
-<script src="https://jsdelivr.net"></script>
+<script src="https://jsdelivr.net" defer></script>
 
 <style>
   :root {
@@ -453,7 +453,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
   <div style="color:#94a3b8;font-size:13px;margin-top:6px;pointer-events:none;">Tap anywhere or press Skip Intro to enter</div>
 </div>
 
-<audio id="bgMusic" src="/theme.mp3" loop preload="auto"></audio>
+<audio id="bgMusic" src="/theme.mp3" loop preload="none"></audio>
 
 <header>
   <div class="brand">⚔️ DOUBLE SAGE</div>
