@@ -442,6 +442,23 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
     background: var(--card); border: 1px solid #334155; border-radius: 16px;
     max-width: 520px; width: 100%; max-height: 85vh; overflow-y: auto; padding: 18px;
   }
+    .victory-poster {
+    background: radial-gradient(circle at top, #1e293b 0%, #090d16 85%);
+    border: 2px solid var(--gold); border-radius: 18px; padding: 20px 16px;
+    text-align: center; box-shadow: 0 0 30px rgba(250, 204, 21, 0.25);
+    margin-bottom: 14px; position: relative; overflow: hidden;
+  }
+  .victory-trophy { font-size: 52px; line-height: 1.1; margin-bottom: 6px; }
+  .victory-title { font-size: 13px; font-weight: 800; letter-spacing: 2px; color: var(--accent); text-transform: uppercase; }
+  .victory-winner { font-size: 28px; font-weight: 900; color: var(--gold); margin: 6px 0; text-shadow: 0 2px 12px rgba(250,204,21,0.4); }
+  .victory-score-pill {
+    display: inline-block; background: rgba(34, 197, 94, 0.15); border: 1px solid var(--green);
+    color: var(--green); font-weight: 900; font-size: 16px; padding: 6px 16px; border-radius: 999px; margin: 6px 0 12px;
+  }
+  .victory-share-box {
+    background: #0b1120; border: 1px solid #334155; border-radius: 12px; padding: 10px; text-align: left; margin-top: 10px;
+  }
+
 </style>
 </head>
 <body>
@@ -473,6 +490,19 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
 
 <div class="container">
   <div id="homeView">
+   <div id="rejoinBanner" class="card hidden" style="border:1px solid var(--green);background:#0d1f17;">
+   <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
+     <div>
+       <div style="font-weight:900;color:var(--green);">🔄 Active Match Found!</div>
+       <div id="rejoinBannerText" style="font-size:12px;color:#cbd5e1;">Room ----</div>
+     </div>
+     <div style="display:flex;gap:6px;">
+       <button class="btn btn-green btn-sm" type="button" onclick="rejoinSavedRoom()">Rejoin Now</button>
+       <button class="btn btn-dark btn-sm" type="button" onclick="clearSavedRoom()">Dismiss</button>
+     </div>
+   </div>
+ </div>
+
       <div class="card" style="border:1px solid var(--accent);">
       <h2 style="color:var(--accent);">🤖 Play vs. Sage Bot (Instant Solo Duel)</h2>
       <p style="font-size:13px;color:var(--muted);margin:0 0 8px;">No opponent online yet? Battle Sage Bot using any pack right now!</p>
@@ -551,7 +581,10 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
           <span class="badge" id="roomModeBadge">MODE</span>
           <span class="badge" id="roundBadge">Round 1/5</span>
         </div>
-        <button class="pill" type="button" onclick="copyInviteLink()">📋 Copy Invite Link</button>
+             <div style="display:flex;gap:6px;">
+       <button class="pill" type="button" onclick="copyInviteLink()">📋 Invite</button>
+       <button class="pill" type="button" style="border-color:var(--red);color:#fca5a5;" onclick="confirmLeaveRoom()">🏠 Home</button>
+     </div>
       </div>
       <div id="scoreboardArea" style="margin-top:12px;"></div>
     </div>
@@ -627,11 +660,12 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
       <button id="nextRoundBtn" class="btn btn-primary hidden" type="button" onclick="nextRound()">➡️ Next Round</button>
     </div>
 
-    <div id="gameoverPhase" class="card hidden">
-      <h2 style="color:var(--gold);text-align:center;">🏆 MATCH COMPLETE!</h2>
-      <div id="finalPodium"></div>
-      <button class="btn btn-primary" type="button" onclick="location.href='/'">🏠 Back to Home</button>
-    </div>
+ <div id="gameoverPhase" class="card hidden">
+   <div id="mpVictoryPoster" class="victory-poster"></div>
+   <div id="finalPodium"></div>
+   <button class="btn btn-primary" type="button" onclick="finishAndGoHome()">🏠 Back to Home</button>
+ </div>
+
   </div>
 </div>
   <div id="botView" class="hidden">
@@ -688,11 +722,14 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
       <button class="btn btn-primary" type="button" onclick="nextBotRound()">➡️ Next Round</button>
     </div>
 
-    <div id="botGameoverBox" class="card hidden" style="text-align:center;">
-      <h2 id="botFinalHeadline" style="color:var(--gold);">🏆 DUEL COMPLETE!</h2>
-      <p id="botFinalSummary" style="font-size:16px;font-weight:700;"></p>
-      <button class="btn btn-primary" type="button" onclick="exitBotMatch()">🏠 Back to Home</button>
-    </div>
+ <div id="botGameoverBox" class="card hidden">
+   <div id="botVictoryPoster" class="victory-poster"></div>
+   <div class="row">
+     <button class="btn btn-gold" type="button" onclick="startBotMatch()">🔁 Rematch</button>
+     <button class="btn btn-primary" type="button" onclick="exitBotMatch(true)">🏠 Back to Home</button>
+   </div>
+ </div>
+
   </div>
 
 <div id="howToPlayModal" class="modal-bg hidden" onclick="if(event.target===this)this.classList.add('hidden')">
@@ -1365,9 +1402,103 @@ const res = await apiPost('/api/join', { name: name, code: code });
 if (res.ok) enterRoom(res.room, res.player_id);
 else alert(res.error || 'Could not join room');
 }
+function buildVictoryPosterHtml(winnerName, pointsText, subtitleText) {
+  const defaultLink = localStorage.getItem('ds_custom_share_link') || location.origin;
+  return '<div class="victory-trophy">🏆👑🏆</div>' +
+    '<div class="victory-title">DOUBLE SAGE GRAND CHAMPION</div>' +
+    '<div class="victory-winner">' + escapeHtml(winnerName) + '</div>' +
+    '<div class="victory-score-pill">⚡ ' + escapeHtml(pointsText) + '</div>' +
+    '<div style="font-size:12px;color:#cbd5e1;">' + escapeHtml(subtitleText) + '</div>' +
+    '<div class="victory-share-box">' +
+      '<label style="margin:0 0 4px;font-size:11px;color:var(--gold);">🔗 Editable Game Link (Tap to edit & share your victory):</label>' +
+      '<div class="row">' +
+        '<input id="victoryShareUrlInput" value="' + escapeHtml(defaultLink) + '" oninput="localStorage.setItem(\'ds_custom_share_link\', this.value)" style="font-size:12px;padding:7px 9px;">' +
+        '<button class="btn btn-gold btn-sm" type="button" onclick="shareVictoryCard(\'' + escapeHtml(winnerName).replace(/'/g, '') + '\', \'' + escapeHtml(pointsText).replace(/'/g, '') + '\')">📤 Share</button>' +
+      '</div>' +
+    '</div>';
+}
+
+function shareVictoryCard(winnerName, pointsText) {
+  const link = (document.getElementById('victoryShareUrlInput')?.value || location.origin).trim();
+  const msg = '🏆 DOUBLE SAGE CHAMPION!\n👑 Winner: ' + winnerName + '\n⚡ Score: ' + pointsText + '\n\nThink you can beat me? Play Double Sage here:\n' + link;
+  if (navigator.share) {
+    navigator.share({ title: 'Double Sage Victory!', text: msg, url: link }).catch(function() {});
+  } else {
+    if (navigator.clipboard) navigator.clipboard.writeText(msg);
+    alert('Victory card copied! Paste on WhatsApp or X to challenge friends:\n\n' + msg);
+  }
+}
+
+function saveActiveRoomSession(code, pid) {
+  localStorage.setItem('ds_active_room', code);
+  localStorage.setItem('ds_active_pid', pid);
+}
+
+function clearSavedRoom() {
+  localStorage.removeItem('ds_active_room');
+  localStorage.removeItem('ds_active_pid');
+  const b = document.getElementById('rejoinBanner');
+  if (b) b.classList.add('hidden');
+}
+
+function confirmLeaveRoom() {
+  const ok = confirm('Do you really want to give up?\n\nPress OK (YES) to return Home (you can still Rejoin while the room is active), or Cancel (NO) to stay in the match.');
+  if (!ok) return;
+  if (pollTimer) clearInterval(pollTimer);
+  document.getElementById('roomView').classList.add('hidden');
+  document.getElementById('homeView').classList.remove('hidden');
+  checkSavedRoomBanner();
+}
+
+function finishAndGoHome() {
+  clearSavedRoom();
+  if (pollTimer) clearInterval(pollTimer);
+  document.getElementById('roomView').classList.add('hidden');
+  document.getElementById('homeView').classList.remove('hidden');
+}
+
+async function checkSavedRoomBanner() {
+  const code = localStorage.getItem('ds_active_room');
+  const pid = localStorage.getItem('ds_active_pid');
+  const banner = document.getElementById('rejoinBanner');
+  if (!code || !pid || !banner) return;
+  try {
+    const r = await fetch('/api/state/' + code);
+    const data = await r.json();
+    if (data.ok && data.room && data.room.phase !== 'gameover') {
+      const stillIn = data.room.players.some(function(p) { return p.id === pid; });
+      if (stillIn) {
+        document.getElementById('rejoinBannerText').textContent = 'Room ' + code + ' • Round ' + data.room.current_round + '/' + data.room.total_rounds;
+        banner.classList.remove('hidden');
+        return;
+      }
+    }
+  } catch (e) {}
+  clearSavedRoom();
+}
+
+async function rejoinSavedRoom() {
+  const code = localStorage.getItem('ds_active_room');
+  const pid = localStorage.getItem('ds_active_pid');
+  if (!code || !pid) return;
+  try {
+    const r = await fetch('/api/state/' + code);
+    const data = await r.json();
+    if (data.ok && data.room) {
+      document.getElementById('rejoinBanner').classList.add('hidden');
+      enterRoom(data.room, pid);
+    } else {
+      alert('That room has ended or expired.');
+      clearSavedRoom();
+    }
+  } catch (e) {
+    alert('Network error — check connection and tap Rejoin again.');
+  }
+}
 function enterRoom(room, pid) {
 currentCode = room.code;
 myPlayerId = pid;
+saveActiveRoomSession(room.code, pid);
 document.getElementById('homeView').classList.add('hidden');
 document.getElementById('roomView').classList.remove('hidden');
 renderQB();
@@ -1513,12 +1644,23 @@ document.getElementById('nextRoundBtn').classList.toggle('hidden', !isHost || ro
 } else if (room.phase === 'gameover') {
 document.getElementById('gameoverPhase').classList.remove('hidden');
 const ranked = room.players.filter(function(p) { return !p.is_umpire; }).sort(function(a, b) { return (b.score - a.score) || (a.total_time - b.total_time); });
-const pod = document.getElementById('finalPodium');
-pod.innerHTML = '';
-ranked.forEach(function(p, idx) {
-const medal = idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : '#' + (idx + 1);
-pod.innerHTML += '' + medal + ' ' + escapeHtml(p.name) + '' + p.score + ' pts (' + p.total_time + 's)';
-});
+ const ranked = room.players.filter(function(p) { return !p.is_umpire; }).sort(function(a, b) { return (b.score - a.score) || (a.total_time - b.total_time); });
+ const champ = ranked;
+ const poster = document.getElementById('mpVictoryPoster');
+ if (poster && champ) {
+   poster.innerHTML = buildVictoryPosterHtml(
+     champ.name,
+     champ.score + ' Points (' + champ.total_time + 's)',
+     'Room ' + room.code + ' • ' + (room.mode === 'umpire' ? 'Umpire Arena' : 'Standard Duel')
+   );
+ }
+ const pod = document.getElementById('finalPodium');
+ pod.innerHTML = '';
+ ranked.forEach(function(p, idx) {
+   const medal = idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : '#' + (idx + 1);
+   pod.innerHTML += '<div class="player-item"><div><b>' + medal + ' ' + escapeHtml(p.name) + '</b></div><div><b style="color:var(--gold);">' + p.score + ' pts</b> (' + p.total_time + 's)</div></div>';
+ });
+
 }
 }
 // --- SAGE BOT SOLO DUEL ENGINE ---
@@ -1584,12 +1726,18 @@ function startBotMatch() {
   runBotTurn();
 }
 
-function exitBotMatch() {
+function exitBotMatch(skipConfirm) {
+  if (!skipConfirm && botState) {
+    const ok = confirm('Do you really want to give up?\n\nPress OK (YES) to quit to Home, or Cancel (NO) to keep playing.');
+    if (!ok) return;
+  }
   if (botTimerInterval) clearInterval(botTimerInterval);
   botState = null;
   document.getElementById('botView').classList.add('hidden');
   document.getElementById('homeView').classList.remove('hidden');
 }
+
+
 
 function updateBotScores() {
   if (!botState) return;
@@ -1740,6 +1888,7 @@ function nextBotRound() {
 window.addEventListener('DOMContentLoaded', function() {
 renderCreatorUrl();
 renderQB();
+checkSavedRoomBanner();
 const params = new URLSearchParams(location.search);
 const code = params.get('room');
 if (code) document.getElementById('joinCodeInput').value = code.toUpperCase().slice(0, 4);
