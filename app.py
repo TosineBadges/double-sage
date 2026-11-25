@@ -1410,15 +1410,17 @@ function buildVictoryPosterHtml(winnerName, pointsText, subtitleText) {
     '<div class="victory-score-pill">⚡ ' + escapeHtml(pointsText) + '</div>' +
     '<div style="font-size:12px;color:#cbd5e1;">' + escapeHtml(subtitleText) + '</div>' +
     '<div class="victory-share-box">' +
-      '<label style="margin:0 0 4px;font-size:11px;color:var(--gold);">🔗 Editable Game Link (Tap to edit & share your victory):</label>' +
+      '<label style="margin:0 0 4px;font-size:11px;color:var(--gold);">🔗 Editable Game Link (Tap to edit & share):</label>' +
       '<div class="row">' +
         '<input id="victoryShareUrlInput" value="' + escapeHtml(defaultLink) + '" oninput="localStorage.setItem(\'ds_custom_share_link\', this.value)" style="font-size:12px;padding:7px 9px;">' +
-        '<button class="btn btn-gold btn-sm" type="button" onclick="shareVictoryCard(\'' + escapeHtml(winnerName).replace(/'/g, '') + '\', \'' + escapeHtml(pointsText).replace(/'/g, '') + '\')">📤 Share</button>' +
+        '<button class="btn btn-gold btn-sm" type="button" data-winner="' + escapeHtml(winnerName) + '" data-pts="' + escapeHtml(pointsText) + '" onclick="shareVictoryCard(this)">📤 Share</button>' +
       '</div>' +
     '</div>';
 }
 
-function shareVictoryCard(winnerName, pointsText) {
+function shareVictoryCard(btn) {
+  const winnerName = btn.getAttribute('data-winner') || 'Champion';
+  const pointsText = btn.getAttribute('data-pts') || '';
   const link = (document.getElementById('victoryShareUrlInput')?.value || location.origin).trim();
   const msg = '🏆 DOUBLE SAGE CHAMPION!\n👑 Winner: ' + winnerName + '\n⚡ Score: ' + pointsText + '\n\nThink you can beat me? Play Double Sage here:\n' + link;
   if (navigator.share) {
@@ -1645,7 +1647,7 @@ document.getElementById('nextRoundBtn').classList.toggle('hidden', !isHost || ro
 document.getElementById('gameoverPhase').classList.remove('hidden');
 const ranked = room.players.filter(function(p) { return !p.is_umpire; }).sort(function(a, b) { return (b.score - a.score) || (a.total_time - b.total_time); });
  const ranked = room.players.filter(function(p) { return !p.is_umpire; }).sort(function(a, b) { return (b.score - a.score) || (a.total_time - b.total_time); });
- const champ = ranked;
+ const champ = ranked[0];
  const poster = document.getElementById('mpVictoryPoster');
  if (poster && champ) {
    poster.innerHTML = buildVictoryPosterHtml(
