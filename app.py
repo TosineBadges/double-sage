@@ -1402,6 +1402,11 @@ const res = await apiPost('/api/join', { name: name, code: code });
 if (res.ok) enterRoom(res.room, res.player_id);
 else alert(res.error || 'Could not join room');
 }
+
+function saveShareLink(val) {
+  localStorage.setItem('ds_custom_share_link', val);
+}
+
 function buildVictoryPosterHtml(winnerName, pointsText, subtitleText) {
   const defaultLink = localStorage.getItem('ds_custom_share_link') || location.origin;
   return '<div class="victory-trophy">🏆👑🏆</div>' +
@@ -1412,7 +1417,7 @@ function buildVictoryPosterHtml(winnerName, pointsText, subtitleText) {
     '<div class="victory-share-box">' +
       '<label style="margin:0 0 4px;font-size:11px;color:var(--gold);">🔗 Editable Game Link (Tap to edit & share):</label>' +
       '<div class="row">' +
-        '<input id="victoryShareUrlInput" value="' + escapeHtml(defaultLink) + '" oninput="localStorage.setItem(\'ds_custom_share_link\', this.value)" style="font-size:12px;padding:7px 9px;">' +
+        '<input id="victoryShareUrlInput" value="' + escapeHtml(defaultLink) + '" oninput="saveShareLink(this.value)" style="font-size:12px;padding:7px 9px;">' +
         '<button class="btn btn-gold btn-sm" type="button" data-winner="' + escapeHtml(winnerName) + '" data-pts="' + escapeHtml(pointsText) + '" onclick="shareVictoryCard(this)">📤 Share</button>' +
       '</div>' +
     '</div>';
