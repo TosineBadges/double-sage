@@ -344,6 +344,9 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
 <script src="https://jsdelivr.net" defer></script>
 <script src="/packs.js?v=3" defer></script>
 
+
+
+
 <style>
   :root {
     --bg: #090d16;
