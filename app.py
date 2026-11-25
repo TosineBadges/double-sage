@@ -342,7 +342,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Double Sage — Online Multiplayer</title>
 <script src="https://jsdelivr.net" defer></script>
-<script src="/packs.js" defer></script>
+<script src="/packs.js?v=3" defer></script>
 
 <style>
   :root {
@@ -802,7 +802,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
     <div id="qbListContainer" style="margin-top:10px;"></div>
   </div>
 </div>
-<script src="/game.js" defer></script>
+<script src="/game.js?v=3" defer></script>
 </body>
 </html>
 """
