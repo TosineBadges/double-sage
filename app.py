@@ -383,7 +383,8 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
   <div style="color:#94a3b8;font-size:13px;margin-top:6px;pointer-events:none;">Press Skip Intro to enter immediately</div>
 </div>
 
-<audio id="bgMusic" src="/theme.mp3" loop preload="none"></audio>
+<audio id="bgMusic" src="/theme.mp3" loop preload="metadata"></audio>
+
 
 <header>
   <div class="brand">⚔️ DOUBLE SAGE</div>
