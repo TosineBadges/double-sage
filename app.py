@@ -330,7 +330,9 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Double Sage — Online Multiplayer</title>
+<meta name="google-site-verification" content="DqbTl5Xqf8ETz3PRIwKS1010gTzP1n3pcM0iDUoSA5c" />
+<title>Double Sage — Online Multiplayer Trivia & Word Game</title>
+<meta name="description" content="Play Double Sage online! Create live multiplayer trivia rooms with friends, battle Sage Bot slo, or iport cstom question packs">
 <script src="https://jsdelivr.net" defer></script>
 <script src="/packs.js?v=3" defer></script>
 <style>
